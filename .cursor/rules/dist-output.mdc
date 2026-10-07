@@ -1,0 +1,22 @@
+---
+description: Always place build artifacts in dist/
+alwaysApply: true
+---
+
+# Build output → `dist/`
+
+Whenever you build `cursor-cleanup` (or any release binary for this project):
+
+1. Run `cargo build --release` as usual.
+2. **Always copy the final executable into `dist/`** (create the folder if missing):
+   - Windows: `dist/cursor-cleanup.exe`
+   - Unix: `dist/cursor-cleanup`
+3. Tell the user the path under `dist/`, not only `target/release/`.
+4. Do not treat `target/release/` as the user-facing deliverable.
+
+PowerShell example:
+
+```powershell
+New-Item -ItemType Directory -Path dist -Force | Out-Null
+Copy-Item -Force target\release\cursor-cleanup.exe dist\cursor-cleanup.exe
+```

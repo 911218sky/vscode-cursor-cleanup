@@ -1,0 +1,286 @@
+use std::sync::Mutex;
+
+static LANG: Mutex<Lang> = Mutex::new(Lang::ZhTw);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lang {
+    /// 繁體中文（預設）
+    ZhTw,
+    /// 简体中文
+    ZhCn,
+    /// English
+    En,
+}
+
+impl Lang {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "zh-tw" | "zh_tw" | "zh-hant" | "tw" | "trad" => Some(Lang::ZhTw),
+            "zh-cn" | "zh_cn" | "zh-hans" | "cn" | "simp" => Some(Lang::ZhCn),
+            "en" | "en-us" | "en_us" | "english" => Some(Lang::En),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::ZhTw => "zh-TW",
+            Lang::ZhCn => "zh-CN",
+            Lang::En => "en",
+        }
+    }
+}
+
+pub fn set_lang(lang: Lang) {
+    if let Ok(mut g) = LANG.lock() {
+        *g = lang;
+    }
+}
+
+pub fn lang() -> Lang {
+    LANG.lock().map(|g| *g).unwrap_or(Lang::ZhTw)
+}
+
+macro_rules! tr {
+    ($($variant:ident => { tw: $tw:expr, cn: $cn:expr, en: $en:expr }),+ $(,)?) => {
+        #[derive(Clone, Copy)]
+        pub enum Msg {
+            $($variant),+
+        }
+
+        pub fn t(msg: Msg) -> &'static str {
+            match (lang(), msg) {
+                $(
+                    (Lang::ZhTw, Msg::$variant) => $tw,
+                    (Lang::ZhCn, Msg::$variant) => $cn,
+                    (Lang::En, Msg::$variant) => $en,
+                )+
+            }
+        }
+    };
+}
+
+tr! {
+    Back => { tw: "← 返回", cn: "← 返回", en: "← Back" },
+    BannerHint => { tw: "↑↓ 選擇  Enter 確認  可返回", cn: "↑↓ 选择  Enter 确认  可返回", en: "↑↓ Select  Enter Confirm  Back OK" },
+    PauseExit => { tw: "按 Enter 關閉視窗…", cn: "按 Enter 关闭窗口…", en: "Press Enter to close…" },
+    PressEnterMenu => { tw: "按 Enter 回主選單…", cn: "按 Enter 回主菜单…", en: "Press Enter for main menu…" },
+    PickLang => { tw: "選擇語言 / Language", cn: "选择语言 / Language", en: "Language" },
+    LangTw => { tw: "繁體中文", cn: "繁体中文", en: "Traditional Chinese" },
+    LangCn => { tw: "简体中文", cn: "简体中文", en: "Simplified Chinese" },
+    LangEn => { tw: "English", cn: "English", en: "English" },
+    PickApp => { tw: "要選擇哪個應用？", cn: "要选择哪个应用？", en: "Which app?" },
+    AppCursor => { tw: "僅 Cursor", cn: "仅 Cursor", en: "Cursor only" },
+    AppVscode => { tw: "僅 VSCode", cn: "仅 VSCode", en: "VSCode only" },
+    AppBoth => { tw: "兩者都選", cn: "两者都选", en: "Both" },
+    AppAll => { tw: "全部", cn: "全部", en: "All" },
+    Exit => { tw: "退出", cn: "退出", en: "Exit" },
+    BadApp => { tw: "未知 --app，請用 cursor|vscode|both", cn: "未知 --app，请用 cursor|vscode|both", en: "Unknown --app; use cursor|vscode|both" },
+    TotalSize => { tw: "總占用", cn: "总占用", en: "Total" },
+    Cleanable => { tw: "可清理", cn: "可清理", en: "Cleanable" },
+    RiskSafe => { tw: "[安全]", cn: "[安全]", en: "[safe]" },
+    RiskMedium => { tw: "[中等]", cn: "[中等]", en: "[medium]" },
+    RiskHigh => { tw: "[高危]", cn: "[高危]", en: "[high]" },
+    RiskSafeWord => { tw: "安全", cn: "安全", en: "safe" },
+    RiskMediumWord => { tw: "中等", cn: "中等", en: "medium" },
+    RiskHighWord => { tw: "高危", cn: "高危", en: "high" },
+    PickPlan => { tw: "選擇清理方案", cn: "选择清理方案", en: "Choose a cleanup plan" },
+    PlanCustom => { tw: "自訂 — 逐項確認", cn: "自定义 — 逐项确认", en: "Custom — confirm each item" },
+    PlanSkipApp => { tw: "跳過這個應用", cn: "跳过这个应用", en: "Skip this app" },
+    CustomHint => { tw: "自訂：對每一項選擇（可隨時返回）", cn: "自定义：对每一项选择（可随时返回）", en: "Custom: choose for each item (Back anytime)" },
+    Clean => { tw: "清理", cn: "清理", en: "Clean" },
+    Skip => { tw: "跳過", cn: "跳过", en: "Skip" },
+    NothingSelected => { tw: "未選擇清理項", cn: "未选择清理项", en: "Nothing selected" },
+    AboutToClean => { tw: "即將清理：", cn: "即将清理：", en: "Will clean:" },
+    StillContinue => { tw: "仍要繼續？", cn: "仍要继续？", en: "Continue anyway?" },
+    ForceQuitOk => { tw: "已強制關閉", cn: "已强制关闭", en: "Force-quit done" },
+    ForceQuitFail => { tw: "無法完全關閉，檔案可能仍被鎖定", cn: "无法完全关闭，文件可能仍被锁定", en: "Could not fully quit; files may stay locked" },
+    ForceQuitWait => { tw: "正在關閉並等待檔案解鎖…", cn: "正在关闭并等待文件解锁…", en: "Closing and waiting for file locks…" },
+    Continue => { tw: "繼續", cn: "继续", en: "Continue" },
+    EditorRunningAbort => { tw: "應用仍在執行，已略過清理（請先關閉，或改用互動模式強制關閉）", cn: "应用仍在运行，已跳过清理（请先关闭，或改用互动模式强制关闭）", en: "App still running — skipped cleanup (close it first, or use interactive force-quit)" },
+    Done => { tw: "完成", cn: "完成", en: "done" },
+    Partial => { tw: "部分", cn: "部分", en: "partial" },
+    AllDone => { tw: "全部完成", cn: "全部完成", en: "All done" },
+    Exited => { tw: "已退出", cn: "已退出", en: "Exited" },
+    TargetCachedData => { tw: "應用快取 CachedData", cn: "应用缓存 CachedData", en: "App cache CachedData" },
+    TargetExt => { tw: "擴充安裝包快取", cn: "扩展安装包缓存", en: "Extension VSIX cache" },
+    TargetGpu => { tw: "GPU / 渲染快取", cn: "GPU / 渲染缓存", en: "GPU / render caches" },
+    TargetLogs => { tw: "日誌 logs", cn: "日志 logs", en: "logs" },
+    TargetHistory => { tw: "本機編輯歷史 History", cn: "本地编辑历史 History", en: "Local edit history" },
+    TargetState => { tw: "狀態庫 state.vscdb", cn: "状态库 state.vscdb", en: "State DB state.vscdb" },
+    MainMenu => { tw: "主選單", cn: "主菜单", en: "Main menu" },
+    MenuClean => { tw: "清理快取 / 狀態", cn: "清理缓存 / 状态", en: "Clean caches / state" },
+    MenuBackup => { tw: "備份", cn: "备份", en: "Backup" },
+    MenuRestore => { tw: "恢復備份", cn: "恢复备份", en: "Restore backup" },
+    BackupMode => { tw: "備份內容", cn: "备份内容", en: "Backup contents" },
+    BackupConfigOnly => { tw: "僅設定（settings / keybindings / snippets）", cn: "仅配置（settings / keybindings / snippets）", en: "Config only (settings / keybindings / snippets)" },
+    BackupConfigState => { tw: "設定 + state.vscdb（推薦完整）", cn: "配置 + state.vscdb（推荐完整）", en: "Config + state.vscdb (recommended)" },
+    BackupNameAsk => { tw: "備份名稱（資料夾名）", cn: "备份名称（文件夹名）", en: "Backup name (folder)" },
+    BackupNameHint => { tw: "可自訂名稱；直接 Enter＝預設時間戳（如 cursor-backup-2026-10-07-…）", cn: "可自定义名称；直接 Enter＝默认时间戳（如 cursor-backup-2026-10-07-…）", en: "Custom name OK; Enter alone = default timestamp (e.g. cursor-backup-2026-10-07-…)" },
+    BackupDone => { tw: "備份完成", cn: "备份完成", en: "Backup done" },
+    BackupFail => { tw: "備份失敗", cn: "备份失败", en: "Backup failed" },
+    NoBackups => { tw: "找不到備份（程式旁的 backups 資料夾）", cn: "找不到备份（程序旁的 backups 文件夹）", en: "No backups found (backups/ next to the exe)" },
+    PickBackup => { tw: "選擇要恢復的備份", cn: "选择要恢复的备份", en: "Select backup to restore" },
+    RestoreDone => { tw: "恢復完成 — 請重啟編輯器", cn: "恢复完成 — 请重启编辑器", en: "Restore done — please restart the editor" },
+    RestoreFail => { tw: "恢復失敗", cn: "恢复失败", en: "Restore failed" },
+}
+
+pub fn risk_tag(risk: crate::paths::Risk) -> &'static str {
+    match risk {
+        crate::paths::Risk::Safe => t(Msg::RiskSafe),
+        crate::paths::Risk::Medium => t(Msg::RiskMedium),
+        crate::paths::Risk::High => t(Msg::RiskHigh),
+    }
+}
+
+pub fn risk_word(risk: crate::paths::Risk) -> &'static str {
+    match risk {
+        crate::paths::Risk::Safe => t(Msg::RiskSafeWord),
+        crate::paths::Risk::Medium => t(Msg::RiskMediumWord),
+        crate::paths::Risk::High => t(Msg::RiskHighWord),
+    }
+}
+
+pub fn target_title(kind: crate::paths::TargetKind) -> &'static str {
+    match kind {
+        crate::paths::TargetKind::CachedData => t(Msg::TargetCachedData),
+        crate::paths::TargetKind::ExtVsix => t(Msg::TargetExt),
+        crate::paths::TargetKind::Gpu => t(Msg::TargetGpu),
+        crate::paths::TargetKind::Logs => t(Msg::TargetLogs),
+        crate::paths::TargetKind::History => t(Msg::TargetHistory),
+        crate::paths::TargetKind::State => t(Msg::TargetState),
+    }
+}
+
+pub fn plan_conservative(size: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("保守清理 — 僅安全項（約 {size}）"),
+        Lang::ZhCn => format!("保守清理 — 仅安全项（约 {size}）"),
+        Lang::En => format!("Conservative — safe only (~{size})"),
+    }
+}
+
+pub fn plan_standard(size: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("標準清理 — 安全+編輯歷史（約 {size}）"),
+        Lang::ZhCn => format!("标准清理 — 安全+编辑历史（约 {size}）"),
+        Lang::En => format!("Standard — safe + history (~{size})"),
+    }
+}
+
+pub fn plan_deep(size: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("深度清理 — 含 state.vscdb（約 {size}）"),
+        Lang::ZhCn => format!("深度清理 — 含 state.vscdb（约 {size}）"),
+        Lang::En => format!("Deep — includes state.vscdb (~{size})"),
+    }
+}
+
+pub fn fmt_running(name: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{name} 正在執行 — 部分檔案可能被鎖定"),
+        Lang::ZhCn => format!("{name} 正在运行 — 部分文件可能被锁定"),
+        Lang::En => format!("{name} is running — some files may be locked"),
+    }
+}
+
+pub fn fmt_no_dir(name: &str, path: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{name} 目錄不存在: {path}"),
+        Lang::ZhCn => format!("{name} 目录不存在: {path}"),
+        Lang::En => format!("{name} folder missing: {path}"),
+    }
+}
+
+pub fn fmt_no_resolve(name: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{name} 無法解析資料目錄"),
+        Lang::ZhCn => format!("{name} 无法解析数据目录"),
+        Lang::En => format!("{name}: cannot resolve data folder"),
+    }
+}
+
+pub fn fmt_partial(size: &str, n: usize) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{} {}（{} 個檔案被鎖）", t(Msg::Partial), size, n),
+        Lang::ZhCn => format!("{} {}（{} 个文件被锁）", t(Msg::Partial), size, n),
+        Lang::En => format!("{} {} ({} file(s) locked)", t(Msg::Partial), size, n),
+    }
+}
+
+pub fn fmt_summary(name: &str, before: &str, after: &str, freed: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{name}  {before} → {after}  （應用內釋放約 {freed}）"),
+        Lang::ZhCn => format!("{name}  {before} → {after}  （应用内释放约 {freed}）"),
+        Lang::En => format!("{name}  {before} → {after}  (app folder freed ~{freed})"),
+    }
+}
+
+pub fn help_text() -> String {
+    match lang() {
+        Lang::ZhTw => "\
+cursor-cleanup  —  VSCode / Cursor 清理 / 備份工具
+
+用法:
+  cursor-cleanup.exe
+  cursor-cleanup.exe --scan --app cursor
+  cursor-cleanup.exe --lang en --app cursor
+
+選項:
+  -a, --app <cursor|vscode|both>  指定應用
+  -l, --lang <zh-TW|zh-CN|en>     語言（預設 zh-TW）
+  -y, --yes                       非互動，只清安全項（需搭配 --app；應用執行中會略過）
+      --scan                      只掃描占用
+      --no-pause                  結束不暫停
+  -h, --help                      說明
+  -V, --version                   版本
+
+互動主選單：清理 / 備份 / 恢復備份
+備份位置：與程式同目錄的 backups\\\\
+"
+        .into(),
+        Lang::ZhCn => "\
+cursor-cleanup  —  VSCode / Cursor 清理 / 备份工具
+
+用法:
+  cursor-cleanup.exe
+  cursor-cleanup.exe --scan --app cursor
+  cursor-cleanup.exe --lang en --app cursor
+
+选项:
+  -a, --app <cursor|vscode|both>  指定应用
+  -l, --lang <zh-TW|zh-CN|en>     语言（默认 zh-TW）
+  -y, --yes                       非互动，只清安全项（需搭配 --app；应用运行中会跳过）
+      --scan                      只扫描占用
+      --no-pause                  结束不暂停
+  -h, --help                      帮助
+  -V, --version                   版本
+
+互动主菜单：清理 / 备份 / 恢复备份
+备份位置：与程序同目录的 backups\\\\
+"
+        .into(),
+        Lang::En => "\
+cursor-cleanup  —  VSCode / Cursor clean / backup tool
+
+Usage:
+  cursor-cleanup.exe
+  cursor-cleanup.exe --scan --app cursor
+  cursor-cleanup.exe --lang zh-TW --app cursor
+
+Options:
+  -a, --app <cursor|vscode|both>  Target app
+  -l, --lang <zh-TW|zh-CN|en>     Language (default zh-TW)
+  -y, --yes                       Non-interactive, safe items only (requires --app; skips if app running)
+      --scan                      Scan sizes only
+      --no-pause                  Do not pause on exit
+  -h, --help                      Help
+  -V, --version                   Version
+
+Interactive menu: Clean / Backup / Restore
+Backups: backups\\\\ next to the executable
+"
+        .into(),
+    }
+}

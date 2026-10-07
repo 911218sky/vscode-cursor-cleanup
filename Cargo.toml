@@ -1,0 +1,25 @@
+[package]
+name = "cursor-cleanup"
+version = "0.2.4"
+edition = "2021"
+description = "Interactive cleaner for VSCode / Cursor"
+license = "MIT"
+repository = "https://github.com/911218sky/vscode-cursor-cleanup"
+readme = "README.md"
+
+[[bin]]
+name = "cursor-cleanup"
+path = "src/main.rs"
+
+[dependencies]
+# UI only
+dialoguer = { version = "0.11", default-features = true }
+colored = "2"
+console = "0.15"
+unicode-width = "0.2.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3

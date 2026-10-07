@@ -1,0 +1,23 @@
+# Generated
+/target/
+**/*.rs.bk
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Backups / local
+*-backup-*.zip
+*.log
+
+# Legacy local notes
+.env
+
+/dist/
+
