@@ -5,7 +5,7 @@ use crate::i18n::{self, t, Lang, Msg};
 use crate::paths::{Editor, Risk};
 use colored::Colorize;
 use console::Term;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Input, MultiSelect, Select};
 use std::io::{self, Write};
 use unicode_width::UnicodeWidthStr;
 
@@ -247,51 +247,144 @@ pub fn run_restore_flow() -> bool {
             _ => return false,
         };
 
-        let backups = backup::list_backups(filter);
-        if backups.is_empty() {
-            warn(t(Msg::NoBackups));
-            if let Some(root) = backup::backups_root() {
-                dim(&root.display().to_string());
+        let mut did_any = false;
+        // Action loop: Back returns to app picker (not main menu).
+        loop {
+            let backups = backup::list_backups(filter);
+            if backups.is_empty() {
+                warn(t(Msg::NoBackups));
+                if let Some(root) = backup::backups_root() {
+                    dim(&root.display().to_string());
+                }
+                break;
             }
-            return false;
-        }
 
-        let mut labels: Vec<String> = backups.iter().map(|b| b.label()).collect();
-        labels.push(t(Msg::Back).to_string());
-        let label_refs: Vec<&str> = labels.iter().map(|s| s.as_str()).collect();
-
-        // Choosing a backup is the confirmation — restore immediately after.
-        let idx = match ask(t(Msg::PickBackup), &label_refs, 0) {
-            Some(i) => i,
-            None => continue,
-        };
-        if idx >= backups.len() {
-            continue;
-        }
-        let chosen: &BackupInfo = &backups[idx];
-        let editor = match chosen.app.as_str() {
-            "vscode" => Editor::VsCode,
-            _ => Editor::Cursor,
-        };
-
-        println!();
-        dim(&chosen.path.display().to_string());
-
-        if !ensure_editor_ready(editor) {
-            continue;
-        }
-
-        match backup::restore_backup(chosen) {
-            Ok(()) => {
-                ok(t(Msg::RestoreDone));
-                dim(&chosen.path.display().to_string());
+            let action = match ask(
+                t(Msg::BackupManage),
+                &[
+                    t(Msg::ActionRestore),
+                    t(Msg::ActionDelete),
+                    t(Msg::Back),
+                ],
+                0,
+            ) {
+                Some(a) => a,
+                None => return did_any,
+            };
+            if action == 2 {
+                break;
             }
-            Err(e) => {
-                warn(&format!("{}: {e}", t(Msg::RestoreFail)));
+
+            if action == 1 {
+                match delete_backups_multi(&backups) {
+                    DeletePick::Deleted => {
+                        did_any = true;
+                        // Stay here so the list refreshes; user can delete more or go Back.
+                    }
+                    DeletePick::Back => {}
+                }
                 continue;
             }
+
+            let mut labels: Vec<String> = backups.iter().map(|b| b.label()).collect();
+            labels.push(t(Msg::Back).to_string());
+            let label_refs: Vec<&str> = labels.iter().map(|s| s.as_str()).collect();
+
+            // Choosing a backup is the confirmation — restore immediately after.
+            let idx = match ask(t(Msg::PickBackup), &label_refs, 0) {
+                Some(i) => i,
+                None => continue,
+            };
+            if idx >= backups.len() {
+                continue;
+            }
+            let chosen: &BackupInfo = &backups[idx];
+            let editor = match chosen.app.as_str() {
+                "vscode" => Editor::VsCode,
+                _ => Editor::Cursor,
+            };
+
+            println!();
+            dim(&chosen.path.display().to_string());
+
+            if !ensure_editor_ready(editor) {
+                continue;
+            }
+
+            match backup::restore_backup(chosen) {
+                Ok(()) => {
+                    ok(t(Msg::RestoreDone));
+                    dim(&chosen.path.display().to_string());
+                    return true;
+                }
+                Err(e) => {
+                    warn(&format!("{}: {e}", t(Msg::RestoreFail)));
+                    continue;
+                }
+            }
         }
-        return true;
+
+        if did_any {
+            return true;
+        }
+    }
+}
+
+enum DeletePick {
+    Deleted,
+    Back,
+}
+
+/// Multi-select backups and delete them.
+/// Last item is 「返回」; selecting it (or Esc / cancel) goes back without deleting.
+fn delete_backups_multi(backups: &[BackupInfo]) -> DeletePick {
+    if backups.is_empty() {
+        return DeletePick::Back;
+    }
+
+    loop {
+        let mut labels: Vec<String> = backups.iter().map(|b| b.label()).collect();
+        labels.push(t(Msg::Back).to_string());
+        let back_idx = backups.len();
+
+        dim(t(Msg::DeleteMultiHint));
+        let selected = match MultiSelect::with_theme(&theme())
+            .with_prompt(t(Msg::PickDeleteBackups))
+            .items(&labels)
+            .interact()
+        {
+            Ok(s) => s,
+            Err(_) => return DeletePick::Back,
+        };
+
+        // Explicit Back row, or Esc-style cancel with nothing useful selected.
+        if selected.contains(&back_idx) {
+            return DeletePick::Back;
+        }
+        if selected.is_empty() {
+            dim(t(Msg::NothingToDelete));
+            // Re-show list so user can pick Back or select items.
+            continue;
+        }
+
+        let mut did = false;
+        for idx in selected {
+            let Some(info) = backups.get(idx) else {
+                continue;
+            };
+            match backup::delete_backup(info) {
+                Ok(()) => {
+                    ok(&format!("{}  ·  {}", t(Msg::DeleteDone), info.label()));
+                    did = true;
+                }
+                Err(e) => warn(&format!("{}: {} ({e})", t(Msg::DeleteFail), info.label())),
+            }
+        }
+        return if did {
+            DeletePick::Deleted
+        } else {
+            DeletePick::Back
+        };
     }
 }
 

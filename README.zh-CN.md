@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.2.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.2.5-brightgreen.svg)
 
 **双击即可用的互动清理工具** · 也支持 CLI  
 默认界面语言：**繁体中文**；可选简体 / English
@@ -34,7 +34,7 @@
 | 语言 | 中文脚本文案 | **繁中（默认）／简中／英文** |
 | 清理方案 | 逐步确认 1–6 | **保守／标准／深度／自定义** |
 | 备份 | 清理流程内 ZIP 到桌面 | **独立「备份」**，可含设置 ± `state.vscdb` |
-| 恢复 | 文档里手动 `unzip`／复制 | **独立「恢复备份」**，可选要恢复哪一份 |
+| 恢复 | 文档里手动 `unzip`／复制 | **恢复／删除备份**，可选一份恢复或勾选多份删除 |
 | 发布 | 自行 clone 脚本 | **GitHub Actions** 多平台 Release |
 | 路径 | 曾硬编码用户目录 | 依系统解析 `%APPDATA%` / Application Support 等 |
 

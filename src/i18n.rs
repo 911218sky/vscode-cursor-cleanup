@@ -112,7 +112,7 @@ tr! {
     MainMenu => { tw: "主選單", cn: "主菜单", en: "Main menu" },
     MenuClean => { tw: "清理快取 / 狀態", cn: "清理缓存 / 状态", en: "Clean caches / state" },
     MenuBackup => { tw: "備份", cn: "备份", en: "Backup" },
-    MenuRestore => { tw: "恢復備份", cn: "恢复备份", en: "Restore backup" },
+    MenuRestore => { tw: "恢復 / 刪除備份", cn: "恢复 / 删除备份", en: "Restore / delete backups" },
     BackupMode => { tw: "備份內容", cn: "备份内容", en: "Backup contents" },
     BackupConfigOnly => { tw: "僅設定（settings / keybindings / snippets）", cn: "仅配置（settings / keybindings / snippets）", en: "Config only (settings / keybindings / snippets)" },
     BackupConfigState => { tw: "設定 + state.vscdb（推薦完整）", cn: "配置 + state.vscdb（推荐完整）", en: "Config + state.vscdb (recommended)" },
@@ -121,7 +121,15 @@ tr! {
     BackupDone => { tw: "備份完成", cn: "备份完成", en: "Backup done" },
     BackupFail => { tw: "備份失敗", cn: "备份失败", en: "Backup failed" },
     NoBackups => { tw: "找不到備份（程式旁的 backups 資料夾）", cn: "找不到备份（程序旁的 backups 文件夹）", en: "No backups found (backups/ next to the exe)" },
+    BackupManage => { tw: "要做什麼？", cn: "要做什么？", en: "What do you want to do?" },
+    ActionRestore => { tw: "恢復一份備份", cn: "恢复一份备份", en: "Restore one backup" },
+    ActionDelete => { tw: "刪除備份（可多選）", cn: "删除备份（可多选）", en: "Delete backups (multi-select)" },
     PickBackup => { tw: "選擇要恢復的備份", cn: "选择要恢复的备份", en: "Select backup to restore" },
+    PickDeleteBackups => { tw: "勾選要刪除的備份", cn: "勾选要删除的备份", en: "Select backups to delete" },
+    DeleteMultiHint => { tw: "空白鍵勾選；Enter 刪除。要返回：勾選最後一項「返回」後 Enter（或 Esc）", cn: "空格键勾选；Enter 删除。要返回：勾选最后一项「返回」后 Enter（或 Esc）", en: "Space toggle; Enter deletes. To go back: select last item ← Back then Enter (or Esc)" },
+    NothingToDelete => { tw: "未勾選任何備份", cn: "未勾选任何备份", en: "No backups selected" },
+    DeleteDone => { tw: "已刪除備份", cn: "已删除备份", en: "Backup deleted" },
+    DeleteFail => { tw: "刪除失敗", cn: "删除失败", en: "Delete failed" },
     RestoreDone => { tw: "恢復完成 — 請重啟編輯器", cn: "恢复完成 — 请重启编辑器", en: "Restore done — please restart the editor" },
     RestoreFail => { tw: "恢復失敗", cn: "恢复失败", en: "Restore failed" },
 }
@@ -236,7 +244,7 @@ cursor-cleanup  —  VSCode / Cursor 清理 / 備份工具
   -h, --help                      說明
   -V, --version                   版本
 
-互動主選單：清理 / 備份 / 恢復備份
+互動主選單：清理 / 備份 / 恢復／刪除備份
 備份位置：與程式同目錄的 backups\\\\
 "
         .into(),
@@ -257,7 +265,7 @@ cursor-cleanup  —  VSCode / Cursor 清理 / 备份工具
   -h, --help                      帮助
   -V, --version                   版本
 
-互动主菜单：清理 / 备份 / 恢复备份
+互动主菜单：清理 / 备份 / 恢复／删除备份
 备份位置：与程序同目录的 backups\\\\
 "
         .into(),
@@ -278,7 +286,7 @@ Options:
   -h, --help                      Help
   -V, --version                   Version
 
-Interactive menu: Clean / Backup / Restore
+Interactive menu: Clean / Backup / Restore-or-delete
 Backups: backups\\\\ next to the executable
 "
         .into(),

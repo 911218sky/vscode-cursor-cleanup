@@ -376,3 +376,22 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
     Ok(())
 }
 
+/// Delete one backup folder. Refuses paths outside `{exe_dir}/backups/`.
+pub fn delete_backup(info: &BackupInfo) -> io::Result<()> {
+    let root = backups_root().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "backup root unavailable")
+    })?;
+    let path = &info.path;
+    if !path.starts_with(&root) || path.as_path() == root.as_path() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "refusing to delete outside backups/",
+        ));
+    }
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(path)?;
+    Ok(())
+}
+

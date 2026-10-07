@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.2.4** (Rust interactive terminal tool)
+Version: **v0.2.5** (Rust interactive terminal tool)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -35,7 +35,7 @@ Same mission: safe tiered cleanup without touching project code or installed ext
 6. Main menu:
    - **Clean** — caches / history / state.vscdb
    - **Backup** — config only, or config + `state.vscdb` (recommended)
-   - **Restore** — pick a backup under `backups/` next to the exe
+   - **Restore / delete** — restore one backup, or multi-select delete under `backups/`
 7. For Clean, choose a plan:
    - **Conservative** — safe caches only
    - **Standard** — safe + edit history
@@ -52,7 +52,7 @@ UI crates: `dialoguer`, `colored`, `console`. Cleanup/backup logic uses the Rust
 - Name: type your own label, or press Enter for the default timestamp
 - Always includes: `settings.json`, `keybindings.json`, `snippets/`
 - Optional: `state.vscdb`
-- Restore lists backups → pick one → restores immediately (force-quits the app if needed)
+- Restore / delete: restore one, or Space-select many and Enter to delete
 - Prefer closing the editor yourself before restore when convenient
 
 ### 2. CLI

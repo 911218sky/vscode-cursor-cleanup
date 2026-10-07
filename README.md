@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.2.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.2.5-brightgreen.svg)
 
 **雙擊即可用的互動清理工具** · 也支援 CLI  
 預設介面：**繁體中文**（可切換簡體／English）
@@ -36,7 +36,7 @@
 | 語言 | 中文腳本文案 | **繁中（預設）／簡中／英文** |
 | 清理方案 | 逐步確認 1–6 | **保守／標準／深度／自訂** |
 | 備份 | 清理流程內 ZIP 到桌面 | **獨立「備份」**，可含設定 ± `state.vscdb` |
-| 恢復 | 文件裡手動 `unzip`／複製 | **獨立「恢復備份」**，可選要恢復哪一份 |
+| 恢復 | 文件裡手動 `unzip`／複製 | **恢復／刪除備份**，可選一份恢復或勾選多份刪除 |
 | 發布 | 自行 clone 腳本 | **GitHub Actions** 多平台 Release |
 | 路徑 | 曾硬編碼使用者目錄 | 依系統解析 `%APPDATA%` / Application Support 等 |
 

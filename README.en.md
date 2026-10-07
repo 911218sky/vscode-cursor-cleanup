@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.2.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.2.5-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
@@ -33,7 +33,7 @@ This fork keeps that mission and adds:
 | Language | Chinese script text | **zh-TW (default) / zh-CN / en** |
 | Clean plans | Step-by-step 1–6 confirms | **Conservative / Standard / Deep / Custom** |
 | Backup | ZIP inside cleanup flow | **Dedicated Backup** (config ± `state.vscdb`) |
-| Restore | Manual unzip/copy in docs | **Dedicated Restore** — **pick which backup** |
+| Restore | Manual unzip/copy in docs | **Restore / delete** — restore one or multi-select delete |
 | Distribution | Clone & chmod scripts | **GitHub Actions** multi-platform Releases |
 | Paths | Hardcoded user paths (fixed upstream-style) | Resolves `%APPDATA%` / Application Support / XDG |
 
