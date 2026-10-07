@@ -538,12 +538,16 @@ impl App {
                 _ => self.should_quit = true,
             },
             Screen::PickApp {
-                use_back: _,
+                use_back,
                 for_backup,
             } => {
                 if idx == 3 {
-                    self.screen = Screen::MainMenu;
-                    self.reset_list(4);
+                    if *use_back {
+                        self.screen = Screen::MainMenu;
+                        self.reset_list(4);
+                    } else {
+                        self.should_quit = true;
+                    }
                     return;
                 }
                 let editors = match idx {
@@ -853,17 +857,12 @@ impl App {
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.should_quit = true;
+        if key.kind != KeyEventKind::Press {
             return;
         }
 
-        if matches!(key.kind, KeyEventKind::Repeat)
-            && matches!(
-                key.code,
-                KeyCode::Up | KeyCode::Down | KeyCode::Char('k') | KeyCode::Char('j')
-            )
-        {
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.should_quit = true;
             return;
         }
 

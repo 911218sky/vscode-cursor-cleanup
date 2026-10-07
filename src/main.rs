@@ -70,19 +70,19 @@ fn parse_cli() -> Cli {
 }
 
 fn run_tui(skip_lang: bool, pause_on_exit: bool) {
-    match tui::run(skip_lang) {
-        Ok(did_work) => {
-            if did_work {
-                cli::pause_menu();
-            }
-        }
+    let outcome = match tui::run(skip_lang) {
+        Ok(o) => o,
         Err(e) => {
             eprintln!("TUI error: {e}");
             std::process::exit(1);
         }
-    }
+    };
     let _ = io::stdout().flush();
-    if pause_on_exit {
+    if outcome.did_work {
+        cli::pause_menu();
+    }
+    // Skip the extra "Press Enter to close" when the user already chose Exit.
+    if pause_on_exit && !outcome.user_quit {
         cli::pause_exit();
     }
 }

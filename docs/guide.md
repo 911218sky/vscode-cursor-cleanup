@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.3.0** (Rust interactive TUI with mouse support)
+Version: **v0.3.1** (Rust interactive TUI with mouse support)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
