@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.2.5** (Rust interactive terminal tool)
+Version: **v0.3.0** (Rust interactive TUI with mouse support)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -13,7 +13,7 @@ Upstream: [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-curs
 |--|----------|--------------|
 | Form | `.sh` | Rust single binary |
 | OS | macOS-focused | Windows / macOS / Linux |
-| UX | `read` prompts | Double-click + arrow menus + Back |
+| UX | `read` prompts | Double-click TUI — mouse click + keyboard + Back |
 | i18n | Chinese script text | zh-TW (default) / zh-CN / en |
 | Plans | Steps 1–6 | Conservative / Standard / Deep / Custom |
 | Backup | Inside cleanup ZIP | Dedicated Backup (config ± `state.vscdb`) |
@@ -31,7 +31,7 @@ Same mission: safe tiered cleanup without touching project code or installed ext
 2. If you got the zip, unzip to get `cursor-cleanup.exe`
 3. **Double-click** → terminal opens
 4. Pick language (default Traditional Chinese)
-5. Use **↑↓ + Enter**; each step has **← Back**
+5. Use **mouse click** or **↑↓ + Enter**; each step has **Esc / ← Back**
 6. Main menu:
    - **Clean** — caches / history / state.vscdb
    - **Backup** — config only, or config + `state.vscdb` (recommended)
@@ -44,7 +44,7 @@ Same mission: safe tiered cleanup without touching project code or installed ext
 8. Optionally return to the main menu or exit
 9. Press **Enter** to close
 
-UI crates: `dialoguer`, `colored`, `console`. Cleanup/backup logic uses the Rust standard library.
+UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plain stdout. Cleanup/backup logic uses the Rust standard library.
 
 ### Backup & restore
 

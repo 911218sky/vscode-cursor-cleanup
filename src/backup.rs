@@ -333,6 +333,24 @@ mod tests {
     }
 }
 
+/// True when `path` resolves under `root` (both canonicalized when possible).
+fn path_under_backups_root(path: &Path, root: &Path) -> io::Result<bool> {
+    if path.as_os_str().is_empty() || path == root {
+        return Ok(false);
+    }
+    let resolved_root = if root.exists() {
+        root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
+    } else {
+        root.to_path_buf()
+    };
+    let resolved_path = if path.exists() {
+        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+    Ok(resolved_path.starts_with(&resolved_root))
+}
+
 pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
     let editor = match info.app.as_str() {
         "cursor" => Editor::Cursor,
@@ -347,6 +365,11 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;
+
+    // Best-effort snapshot before overwriting live config.
+    if root.exists() {
+        let _ = create_backup(editor, true, Some("pre-restore"));
+    }
 
     // Ensure User dirs exist
     fs::create_dir_all(root.join("User"))?;
@@ -382,7 +405,7 @@ pub fn delete_backup(info: &BackupInfo) -> io::Result<()> {
         io::Error::new(io::ErrorKind::NotFound, "backup root unavailable")
     })?;
     let path = &info.path;
-    if !path.starts_with(&root) || path.as_path() == root.as_path() {
+    if !path_under_backups_root(path, &root)? {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "refusing to delete outside backups/",

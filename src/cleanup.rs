@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct TargetStat {
     pub target: CleanTarget,
     pub bytes: u64,
@@ -110,7 +111,8 @@ pub fn is_editor_running(editor: Editor) -> bool {
 
 /// Force-quit editor processes, wait until gone, then settle for file locks.
 /// Returns true if no longer running afterwards.
-pub fn force_quit_editor(editor: Editor) -> bool {
+/// `quiet`: suppress progress dots on stdout (use in TUI alternate screen).
+pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
     if !is_editor_running(editor) {
         return true;
     }
@@ -139,8 +141,10 @@ pub fn force_quit_editor(editor: Editor) -> bool {
     let mut gone = false;
     for i in 0..20 {
         std::thread::sleep(Duration::from_millis(500));
-        let _ = io::stdout().write_all(b".");
-        let _ = io::stdout().flush();
+        if !quiet {
+            let _ = io::stdout().write_all(b".");
+            let _ = io::stdout().flush();
+        }
         if !is_editor_running(editor) {
             gone = true;
             break;
@@ -162,7 +166,6 @@ pub fn force_quit_editor(editor: Editor) -> bool {
 
 pub fn collect_stats(editor: Editor) -> Option<(PathBuf, u64, Vec<TargetStat>)> {
     let root = editor.data_dir()?;
-    let total = path_size(&root);
     let mut stats = Vec::new();
     for target in clean_targets() {
         let mut bytes = 0u64;
@@ -171,6 +174,8 @@ pub fn collect_stats(editor: Editor) -> Option<(PathBuf, u64, Vec<TargetStat>)> 
         }
         stats.push(TargetStat { target, bytes });
     }
+    // Sum known cleanup targets only — avoids walking the entire app data tree.
+    let total: u64 = stats.iter().map(|s| s.bytes).sum();
     Some((root, total, stats))
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "cursor-cleanup"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2021"
 description = "Interactive cleaner for VSCode / Cursor"
 license = "MIT"
@@ -12,14 +12,15 @@ name = "cursor-cleanup"
 path = "src/main.rs"
 
 [dependencies]
-# UI only
-dialoguer = { version = "0.11", default-features = true }
-colored = "2"
-console = "0.15"
-unicode-width = "0.2.2"
+unicode-width = "0.2.0"
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+crossterm = "0.28"
+tui-input = "0.11"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [profile.release]
 lto = true
 codegen-units = 1
 strip = true
-opt-level = 3
+opt-level = "z"
+panic = "abort"

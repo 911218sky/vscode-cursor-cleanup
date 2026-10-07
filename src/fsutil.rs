@@ -23,17 +23,17 @@ pub fn path_size(path: &Path) -> u64 {
         };
         for entry in entries.flatten() {
             let p = entry.path();
-            let ft = match fs::symlink_metadata(&p).map(|m| m.file_type()) {
-                Ok(ft) => ft,
+            let meta = match fs::symlink_metadata(&p) {
+                Ok(m) => m,
                 Err(_) => continue,
             };
-            if ft.is_symlink() {
+            if meta.file_type().is_symlink() {
                 // Count the link node only; do not recurse into the target.
-                total += fs::symlink_metadata(&p).map(|m| m.len()).unwrap_or(0);
-            } else if ft.is_dir() {
+                total += meta.len();
+            } else if meta.is_dir() {
                 stack.push(p);
-            } else if ft.is_file() {
-                total += entry.metadata().map(|m| m.len()).unwrap_or(0);
+            } else if meta.is_file() {
+                total += meta.len();
             }
         }
     }

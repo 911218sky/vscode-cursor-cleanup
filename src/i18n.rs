@@ -63,7 +63,7 @@ macro_rules! tr {
 
 tr! {
     Back => { tw: "← 返回", cn: "← 返回", en: "← Back" },
-    BannerHint => { tw: "↑↓ 選擇  Enter 確認  可返回", cn: "↑↓ 选择  Enter 确认  可返回", en: "↑↓ Select  Enter Confirm  Back OK" },
+    BannerHint => { tw: "滑鼠點選 / ↑↓ Enter  ·  Esc 返回", cn: "鼠标点选 / ↑↓ Enter  ·  Esc 返回", en: "Click / ↑↓ Enter  ·  Esc Back" },
     PauseExit => { tw: "按 Enter 關閉視窗…", cn: "按 Enter 关闭窗口…", en: "Press Enter to close…" },
     PressEnterMenu => { tw: "按 Enter 回主選單…", cn: "按 Enter 回主菜单…", en: "Press Enter for main menu…" },
     PickLang => { tw: "選擇語言 / Language", cn: "选择语言 / Language", en: "Language" },
@@ -88,21 +88,16 @@ tr! {
     PickPlan => { tw: "選擇清理方案", cn: "选择清理方案", en: "Choose a cleanup plan" },
     PlanCustom => { tw: "自訂 — 逐項確認", cn: "自定义 — 逐项确认", en: "Custom — confirm each item" },
     PlanSkipApp => { tw: "跳過這個應用", cn: "跳过这个应用", en: "Skip this app" },
-    CustomHint => { tw: "自訂：對每一項選擇（可隨時返回）", cn: "自定义：对每一项选择（可随时返回）", en: "Custom: choose for each item (Back anytime)" },
     Clean => { tw: "清理", cn: "清理", en: "Clean" },
     Skip => { tw: "跳過", cn: "跳过", en: "Skip" },
     NothingSelected => { tw: "未選擇清理項", cn: "未选择清理项", en: "Nothing selected" },
     AboutToClean => { tw: "即將清理：", cn: "即将清理：", en: "Will clean:" },
-    StillContinue => { tw: "仍要繼續？", cn: "仍要继续？", en: "Continue anyway?" },
     ForceQuitOk => { tw: "已強制關閉", cn: "已强制关闭", en: "Force-quit done" },
     ForceQuitFail => { tw: "無法完全關閉，檔案可能仍被鎖定", cn: "无法完全关闭，文件可能仍被锁定", en: "Could not fully quit; files may stay locked" },
-    ForceQuitWait => { tw: "正在關閉並等待檔案解鎖…", cn: "正在关闭并等待文件解锁…", en: "Closing and waiting for file locks…" },
-    Continue => { tw: "繼續", cn: "继续", en: "Continue" },
-    EditorRunningAbort => { tw: "應用仍在執行，已略過清理（請先關閉，或改用互動模式強制關閉）", cn: "应用仍在运行，已跳过清理（请先关闭，或改用互动模式强制关闭）", en: "App still running — skipped cleanup (close it first, or use interactive force-quit)" },
+    EditorRunningAbort => { tw: "應用仍在執行，已略過清理（請先關閉，或改用 TUI 強制關閉）", cn: "应用仍在运行，已跳过清理（请先关闭，或改用 TUI 强制关闭）", en: "App still running — skipped cleanup (close it first, or use TUI force-quit)" },
     Done => { tw: "完成", cn: "完成", en: "done" },
     Partial => { tw: "部分", cn: "部分", en: "partial" },
     AllDone => { tw: "全部完成", cn: "全部完成", en: "All done" },
-    Exited => { tw: "已退出", cn: "已退出", en: "Exited" },
     TargetCachedData => { tw: "應用快取 CachedData", cn: "应用缓存 CachedData", en: "App cache CachedData" },
     TargetExt => { tw: "擴充安裝包快取", cn: "扩展安装包缓存", en: "Extension VSIX cache" },
     TargetGpu => { tw: "GPU / 渲染快取", cn: "GPU / 渲染缓存", en: "GPU / render caches" },
@@ -118,6 +113,13 @@ tr! {
     BackupConfigState => { tw: "設定 + state.vscdb（推薦完整）", cn: "配置 + state.vscdb（推荐完整）", en: "Config + state.vscdb (recommended)" },
     BackupNameAsk => { tw: "備份名稱（資料夾名）", cn: "备份名称（文件夹名）", en: "Backup name (folder)" },
     BackupNameHint => { tw: "可自訂名稱；直接 Enter＝預設時間戳（如 cursor-backup-2026-10-07-…）", cn: "可自定义名称；直接 Enter＝默认时间戳（如 cursor-backup-2026-10-07-…）", en: "Custom name OK; Enter alone = default timestamp (e.g. cursor-backup-2026-10-07-…)" },
+    BackupNameInvalid => { tw: "名稱無效，將改用預設時間戳", cn: "名称无效，将改用默认时间戳", en: "Invalid name — using default timestamp instead" },
+    PreRestoreBackup => { tw: "恢復前已自動備份目前設定", cn: "恢复前已自动备份目前配置", en: "Auto-backed up current config before restore" },
+    ConfirmDelete => { tw: "確定刪除所選備份？", cn: "确定删除所选备份？", en: "Delete selected backups?" },
+    ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
+    ConfirmYes => { tw: "確定", cn: "确定", en: "Confirm" },
+    ConfirmNo => { tw: "取消", cn: "取消", en: "Cancel" },
+    MouseHint => { tw: "滑鼠點選 / ↑↓ Enter", cn: "鼠标点选 / ↑↓ Enter", en: "Click / ↑↓ Enter" },
     BackupDone => { tw: "備份完成", cn: "备份完成", en: "Backup done" },
     BackupFail => { tw: "備份失敗", cn: "备份失败", en: "Backup failed" },
     NoBackups => { tw: "找不到備份（程式旁的 backups 資料夾）", cn: "找不到备份（程序旁的 backups 文件夹）", en: "No backups found (backups/ next to the exe)" },
@@ -126,8 +128,7 @@ tr! {
     ActionDelete => { tw: "刪除備份（可多選）", cn: "删除备份（可多选）", en: "Delete backups (multi-select)" },
     PickBackup => { tw: "選擇要恢復的備份", cn: "选择要恢复的备份", en: "Select backup to restore" },
     PickDeleteBackups => { tw: "勾選要刪除的備份", cn: "勾选要删除的备份", en: "Select backups to delete" },
-    DeleteMultiHint => { tw: "空白鍵勾選；Enter 刪除。要返回：勾選最後一項「返回」後 Enter（或 Esc）", cn: "空格键勾选；Enter 删除。要返回：勾选最后一项「返回」后 Enter（或 Esc）", en: "Space toggle; Enter deletes. To go back: select last item ← Back then Enter (or Esc)" },
-    NothingToDelete => { tw: "未勾選任何備份", cn: "未勾选任何备份", en: "No backups selected" },
+    DeleteMultiHint => { tw: "空白鍵勾選要刪的項目後 Enter；直接 Enter／Esc＝返回（不用勾選「返回」）", cn: "空格键勾选要删的项目后 Enter；直接 Enter／Esc＝返回（不用勾选「返回」）", en: "Space-check items then Enter to delete; bare Enter / Esc = back" },
     DeleteDone => { tw: "已刪除備份", cn: "已删除备份", en: "Backup deleted" },
     DeleteFail => { tw: "刪除失敗", cn: "删除失败", en: "Delete failed" },
     RestoreDone => { tw: "恢復完成 — 請重啟編輯器", cn: "恢复完成 — 请重启编辑器", en: "Restore done — please restart the editor" },
@@ -244,7 +245,8 @@ cursor-cleanup  —  VSCode / Cursor 清理 / 備份工具
   -h, --help                      說明
   -V, --version                   版本
 
-互動主選單：清理 / 備份 / 恢復／刪除備份
+無參數：TUI 互動（滑鼠 + 鍵盤）— 清理 / 備份 / 恢復／刪除備份
+--scan / --yes：CLI 純文字輸出（需 --app）
 備份位置：與程式同目錄的 backups\\\\
 "
         .into(),
@@ -265,7 +267,8 @@ cursor-cleanup  —  VSCode / Cursor 清理 / 备份工具
   -h, --help                      帮助
   -V, --version                   版本
 
-互动主菜单：清理 / 备份 / 恢复／删除备份
+无参数：TUI 互动（鼠标 + 键盘）— 清理 / 备份 / 恢复／删除备份
+--scan / --yes：CLI 纯文字输出（需 --app）
 备份位置：与程序同目录的 backups\\\\
 "
         .into(),
@@ -286,7 +289,8 @@ Options:
   -h, --help                      Help
   -V, --version                   Version
 
-Interactive menu: Clean / Backup / Restore-or-delete
+No args: TUI (mouse + keyboard) — Clean / Backup / Restore-or-delete
+--scan / --yes: CLI stdout mode (requires --app)
 Backups: backups\\\\ next to the executable
 "
         .into(),
