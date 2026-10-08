@@ -1,3 +1,4 @@
+use crate::cleanup::is_editor_running;
 use crate::fsutil::{copy_best_effort, fmt_size, path_size};
 use crate::paths::{config_rel_paths, exe_dir, timestamp, Editor};
 use std::fs::{self, File};
@@ -358,13 +359,19 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
         ));
     }
     let editor = Editor::Cursor;
+    if is_editor_running(editor) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "cursor still running",
+        ));
+    }
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;
 
-    // Best-effort snapshot before overwriting live config.
+    // Snapshot before overwriting live config (requires Cursor to be closed).
     if root.exists() {
-        let _ = create_backup(editor, true, Some("pre-restore"));
+        create_backup(editor, true, Some("pre-restore"))?;
     }
 
     // Ensure User dirs exist

@@ -112,6 +112,8 @@ tr! {
     PreRestoreBackup => { tw: "恢復前已自動備份目前設定", cn: "恢复前已自动备份目前配置", en: "Auto-backed up current config before restore" },
     ConfirmDelete => { tw: "確定刪除所選備份？", cn: "确定删除所选备份？", en: "Delete selected backups?" },
     ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
+    ConfirmRestoreRunning => { tw: "Cursor 正在執行 — 恢復前必須先關閉（下一步會詢問是否強制關閉）。", cn: "Cursor 正在运行 — 恢复前必须先关闭（下一步会询问是否强制关闭）。", en: "Cursor is running — must close before restore (you will be asked to force quit next)." },
+    RestoreEditorRunning => { tw: "Cursor 仍在執行，無法寫入設定檔", cn: "Cursor 仍在运行，无法写入配置文件", en: "Cursor still running — cannot write config files" },
     ConfirmYes => { tw: "確定", cn: "确定", en: "Confirm" },
     ConfirmNo => { tw: "取消", cn: "取消", en: "Cancel" },
     MouseHint => { tw: "滑鼠點選 / ↑↓ Enter", cn: "鼠标点选 / ↑↓ Enter", en: "Click / ↑↓ Enter" },

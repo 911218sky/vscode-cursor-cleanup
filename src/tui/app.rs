@@ -458,7 +458,7 @@ impl App {
                 self.execute_clean(editor, root, total, stats, selected);
             }
             PendingWork::Restore(info) => {
-                self.run_restore(info);
+                self.do_restore(info);
             }
             PendingWork::Backup {
                 include_state,
@@ -469,7 +469,24 @@ impl App {
         }
     }
 
-    fn run_restore(&mut self, info: BackupInfo) {
+    /// Entry point for restore — always checks / confirms force-quit first.
+    fn start_restore(&mut self, info: BackupInfo) {
+        if !self.ensure_editor_or_confirm(
+            Editor::Cursor,
+            PendingWork::Restore(info.clone()),
+        ) {
+            return;
+        }
+        self.do_restore(info);
+    }
+
+    fn do_restore(&mut self, info: BackupInfo) {
+        if is_editor_running(Editor::Cursor) {
+            self.status = StatusMsg::Warn(t(Msg::RestoreEditorRunning).to_string());
+            self.screen = Screen::MainMenu;
+            self.reset_list(4);
+            return;
+        }
         match backup::restore_backup(&info) {
             Ok(()) => {
                 self.did_work = true;
@@ -478,13 +495,20 @@ impl App {
                     t(Msg::RestoreDone),
                     t(Msg::PreRestoreBackup)
                 ));
+                self.screen = Screen::MainMenu;
+                self.reset_list(4);
             }
             Err(e) => {
-                self.status = StatusMsg::Warn(format!("{}: {e}", t(Msg::RestoreFail)));
+                let msg = if e.to_string().contains("cursor still running") {
+                    t(Msg::RestoreEditorRunning).to_string()
+                } else {
+                    format!("{}: {e}", t(Msg::RestoreFail))
+                };
+                self.status = StatusMsg::Warn(msg);
+                self.screen = Screen::MainMenu;
+                self.reset_list(4);
             }
         }
-        self.screen = Screen::MainMenu;
-        self.reset_list(4);
     }
 
     fn run_backup(&mut self, include_state: bool, custom_name: Option<String>) {
@@ -769,8 +793,12 @@ impl App {
                 }
                 let chosen = backups[idx].clone();
                 let return_to = self.screen.clone();
+                let mut prompt = format!("{}\n{}", t(Msg::ConfirmRestore), chosen.label());
+                if is_editor_running(Editor::Cursor) {
+                    prompt.push_str(&format!("\n{}", t(Msg::ConfirmRestoreRunning)));
+                }
                 self.screen = Screen::Confirm {
-                    prompt: format!("{}\n{}", t(Msg::ConfirmRestore), chosen.label()),
+                    prompt,
                     action: ConfirmAction::Restore(chosen),
                     return_to: Box::new(return_to),
                 };
@@ -799,10 +827,7 @@ impl App {
                 }
                 match action {
                     ConfirmAction::Restore(info) => {
-                        let then = PendingWork::Restore(info.clone());
-                        if self.ensure_editor_or_confirm(Editor::Cursor, then) {
-                            self.run_restore(info);
-                        }
+                        self.start_restore(info);
                     }
                     ConfirmAction::DeleteBackups(infos) => {
                         for info in &infos {

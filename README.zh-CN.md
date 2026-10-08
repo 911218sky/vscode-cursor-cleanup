@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.4.1-brightgreen.svg)
 
 **双击即可用的互动清理工具** · 也支持 CLI  
 默认界面语言：**繁体中文**；可选简体 / English
