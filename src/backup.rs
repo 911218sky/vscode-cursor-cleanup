@@ -337,20 +337,18 @@ mod tests {
 
     #[test]
     fn path_under_backups_rejects_root_and_outside() {
-        let root = std::env::temp_dir().join(format!(
-            "cursor-cleanup-bakroot-{}",
-            std::process::id()
-        ));
+        let stamp = format!("bak-{}-{}", std::process::id(), std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0));
+        let root = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}-root"));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let inside = root.join("cursor-backup-x");
         fs::create_dir_all(&inside).unwrap();
         assert!(path_under_backups_root(&inside, &root).unwrap());
         assert!(!path_under_backups_root(&root, &root).unwrap());
-        let outside = std::env::temp_dir().join(format!(
-            "cursor-cleanup-outside-{}",
-            std::process::id()
-        ));
+        let outside = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}-out"));
         fs::create_dir_all(&outside).unwrap();
         assert!(!path_under_backups_root(&outside, &root).unwrap());
         let _ = fs::remove_dir_all(&root);

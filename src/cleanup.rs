@@ -461,14 +461,18 @@ mod tests {
 
     #[test]
     fn run_target_skips_unsafe_rel_paths() {
-        let root = std::env::temp_dir().join(format!(
-            "cursor-cleanup-guard-{}",
-            std::process::id()
-        ));
-        let outside = std::env::temp_dir().join(format!(
-            "cursor-cleanup-outside-{}",
-            std::process::id()
-        ));
+        // Unique stamp so parallel tests (e.g. backup path_under_backups_*) cannot
+        // remove_dir_all the same temp folder mid-assert.
+        let stamp = format!(
+            "guard-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let root = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}"));
+        let outside = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}-out"));
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
         fs::create_dir_all(&root).unwrap();
@@ -478,7 +482,7 @@ mod tests {
         let evil = CleanTarget {
             kind: TargetKind::CachedData,
             risk: Risk::Safe,
-            rel_paths: &["../cursor-cleanup-outside-should-not-match"],
+            rel_paths: &["../cursor-cleanup-must-not-escape"],
         };
         let result = run_target(&root, &evil);
         assert!(result.errors > 0);
