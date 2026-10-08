@@ -489,13 +489,15 @@ mod tests {
 
     #[test]
     fn windows_cursor_candidates_order() {
-        let base = PathBuf::from(r"C:\Users\test\AppData\Local");
+        // Build expected paths with the same joins so separators match on every OS
+        // (hard-coded `\` strings only equal on Windows).
+        let base = PathBuf::from("local-app-data");
         let cands = windows_cursor_candidates(&base);
         assert_eq!(
             cands,
             vec![
-                PathBuf::from(r"C:\Users\test\AppData\Local\Programs\cursor\Cursor.exe"),
-                PathBuf::from(r"C:\Users\test\AppData\Local\Programs\Cursor\Cursor.exe"),
+                base.join("Programs").join("cursor").join("Cursor.exe"),
+                base.join("Programs").join("Cursor").join("Cursor.exe"),
             ]
         );
     }
