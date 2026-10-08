@@ -53,6 +53,10 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
                 }
                 ev => app.handle_event(ev),
             }
+            // Mouse / key traffic must not starve ForceQuitting, Progress, Scanning.
+            if app.wants_animation() {
+                app.tick();
+            }
             needs_draw = true;
         } else if app.idle_redraw() {
             app.tick();

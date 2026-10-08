@@ -106,11 +106,16 @@ fn run_cli_scan(pause_on_exit: bool) {
 
 fn run_cli_yes(pause_on_exit: bool) {
     cli::print_banner();
-    cli::run_yes_clean(paths::Editor::Cursor);
+    let ok = cli::run_yes_clean(paths::Editor::Cursor);
     println!();
-    cli::ok(i18n::t(i18n::Msg::AllDone));
+    if ok {
+        cli::ok(i18n::t(i18n::Msg::AllDone));
+    }
     if pause_on_exit {
         cli::pause_exit();
+    }
+    if !ok {
+        std::process::exit(1);
     }
 }
 

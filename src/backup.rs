@@ -1,5 +1,7 @@
-use crate::cleanup::is_editor_running;
-use crate::fsutil::{copy_best_effort, fmt_size, path_size};
+use crate::cleanup::{is_editor_running, wait_until_data_unlocked};
+use crate::fsutil::{
+    clear_state_sidecars, copy_best_effort, copy_verified, fmt_size, path_size, sizes_match,
+};
 use crate::paths::{config_rel_paths, exe_dir, timestamp, Editor};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -305,7 +307,8 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_backup_name;
+    use super::{path_under_backups_root, sanitize_backup_name};
+    use std::fs;
 
     #[test]
     fn sanitize_empty_is_none() {
@@ -331,6 +334,28 @@ mod tests {
         assert_eq!(sanitize_backup_name("CON").as_deref(), Some("CON-bak"));
         assert_eq!(sanitize_backup_name("nul.txt").as_deref(), Some("nul.txt-bak"));
     }
+
+    #[test]
+    fn path_under_backups_rejects_root_and_outside() {
+        let root = std::env::temp_dir().join(format!(
+            "cursor-cleanup-bakroot-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let inside = root.join("cursor-backup-x");
+        fs::create_dir_all(&inside).unwrap();
+        assert!(path_under_backups_root(&inside, &root).unwrap());
+        assert!(!path_under_backups_root(&root, &root).unwrap());
+        let outside = std::env::temp_dir().join(format!(
+            "cursor-cleanup-outside-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&outside).unwrap();
+        assert!(!path_under_backups_root(&outside, &root).unwrap());
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
 }
 
 /// True when `path` resolves under `root` (both canonicalized when possible).
@@ -351,7 +376,23 @@ fn path_under_backups_root(path: &Path, root: &Path) -> io::Result<bool> {
     Ok(resolved_path.starts_with(&resolved_root))
 }
 
-pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
+fn verify_restored(src: &Path, dst: &Path) -> io::Result<()> {
+    if !sizes_match(src, dst) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "restore verify failed: size mismatch",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RestoreOutcome {
+    /// True when a pre-restore snapshot of the live config was created.
+    pub did_pre_backup: bool,
+}
+
+pub fn restore_backup(info: &BackupInfo) -> io::Result<RestoreOutcome> {
     if info.app != "cursor" {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -365,23 +406,35 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
             "cursor still running",
         ));
     }
+    if !wait_until_data_unlocked(editor, true) {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "data still locked",
+        ));
+    }
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;
 
     // Snapshot before overwriting live config (requires Cursor to be closed).
-    if root.exists() {
+    let did_pre_backup = if root.exists() {
         create_backup(editor, true, Some("pre-restore"))?;
-    }
+        true
+    } else {
+        false
+    };
 
     // Ensure User dirs exist
     fs::create_dir_all(root.join("User"))?;
-    fs::create_dir_all(root.join("User/globalStorage"))?;
+    let global = root.join("User/globalStorage");
+    fs::create_dir_all(&global)?;
 
     for name in ["settings.json", "keybindings.json"] {
         let src = info.path.join(name);
         if src.exists() {
-            copy_best_effort(&src, &root.join("User").join(name))?;
+            let dst = root.join("User").join(name);
+            copy_verified(&src, &dst, 10)?;
+            verify_restored(&src, &dst)?;
         }
     }
 
@@ -391,15 +444,32 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
         if dest.exists() {
             fs::remove_dir_all(&dest)?;
         }
-        copy_best_effort(&snippets_src, &dest)?;
+        copy_verified(&snippets_src, &dest, 10)?;
+        verify_restored(&snippets_src, &dest)?;
     }
 
     let state_src = info.path.join("state.vscdb");
     if state_src.exists() {
-        copy_best_effort(&state_src, &root.join("User/globalStorage/state.vscdb"))?;
+        // Stale WAL/SHM after force-kill can make Cursor ignore the restored DB.
+        clear_state_sidecars(&global)?;
+        let state_dst = global.join("state.vscdb");
+        if state_dst.exists() {
+            let (_, e) = crate::fsutil::remove_best_effort(&state_dst);
+            if e > 0 && state_dst.exists() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "data still locked",
+                ));
+            }
+        }
+        clear_state_sidecars(&global)?;
+        copy_verified(&state_src, &state_dst, 10)?;
+        verify_restored(&state_src, &state_dst)?;
+        // Ensure sidecars did not reappear empty / stale from a race.
+        clear_state_sidecars(&global)?;
     }
 
-    Ok(())
+    Ok(RestoreOutcome { did_pre_backup })
 }
 
 /// Delete one backup folder. Refuses paths outside `{exe_dir}/backups/`.
@@ -418,6 +488,12 @@ pub fn delete_backup(info: &BackupInfo) -> io::Result<()> {
         return Ok(());
     }
     fs::remove_dir_all(path)?;
+    if path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "delete verify failed: path still exists",
+        ));
+    }
     Ok(())
 }
 

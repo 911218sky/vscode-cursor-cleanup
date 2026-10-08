@@ -110,9 +110,49 @@ pub fn clean_targets() -> Vec<CleanTarget> {
         CleanTarget {
             kind: TargetKind::State,
             risk: Risk::High,
-            rel_paths: &["User/globalStorage/state.vscdb"],
+            rel_paths: &[
+                "User/globalStorage/state.vscdb",
+                "User/globalStorage/state.vscdb-wal",
+                "User/globalStorage/state.vscdb-shm",
+            ],
         },
     ]
+}
+
+/// Plan menu choice → target indices by risk.
+/// `0` conservative (Safe), `1` standard (Safe|Medium), `2` deep (all), else `None`.
+pub fn plan_target_indices(choice: usize, risks: &[Risk]) -> Option<Vec<usize>> {
+    match choice {
+        0 => Some(
+            risks
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| matches!(r, Risk::Safe))
+                .map(|(i, _)| i)
+                .collect(),
+        ),
+        1 => Some(
+            risks
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| matches!(r, Risk::Safe | Risk::Medium))
+                .map(|(i, _)| i)
+                .collect(),
+        ),
+        2 => Some((0..risks.len()).collect()),
+        _ => None,
+    }
+}
+
+/// True when `rel` is a safe relative path under a data root (no `..`, not absolute).
+pub fn is_safe_rel_path(rel: &str) -> bool {
+    if rel.is_empty() || rel.starts_with('/') || rel.starts_with('\\') {
+        return false;
+    }
+    if PathBuf::from(rel).is_absolute() {
+        return false;
+    }
+    !rel.split(['/', '\\']).any(|p| p == "..")
 }
 
 pub fn config_rel_paths() -> &'static [&'static str] {
@@ -189,10 +229,37 @@ mod tests {
     fn clean_targets_stay_under_user_data() {
         for t in clean_targets() {
             for rel in t.rel_paths {
-                assert!(!rel.starts_with('/') && !rel.starts_with('\\'));
-                assert!(!rel.contains(".."));
+                assert!(is_safe_rel_path(rel), "unsafe rel: {rel}");
             }
         }
+    }
+
+    #[test]
+    fn plan_standard_excludes_high() {
+        let risks: Vec<Risk> = clean_targets().iter().map(|t| t.risk).collect();
+        let std = plan_target_indices(1, &risks).unwrap();
+        assert!(!std.is_empty());
+        for i in &std {
+            assert!(
+                !matches!(risks[*i], Risk::High),
+                "standard must not include High index {i}"
+            );
+        }
+        let cons = plan_target_indices(0, &risks).unwrap();
+        for i in &cons {
+            assert!(matches!(risks[*i], Risk::Safe));
+        }
+        let deep = plan_target_indices(2, &risks).unwrap();
+        assert!(deep.iter().any(|&i| matches!(risks[i], Risk::High)));
+        assert!(plan_target_indices(3, &risks).is_none());
+    }
+
+    #[test]
+    fn is_safe_rel_path_rejects_traversal() {
+        assert!(is_safe_rel_path("User/History"));
+        assert!(!is_safe_rel_path("../etc/passwd"));
+        assert!(!is_safe_rel_path("User/../../outside"));
+        assert!(!is_safe_rel_path("/abs"));
     }
 
     #[test]

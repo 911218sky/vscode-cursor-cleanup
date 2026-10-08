@@ -113,7 +113,11 @@ tr! {
     ConfirmDelete => { tw: "確定刪除所選備份？", cn: "确定删除所选备份？", en: "Delete selected backups?" },
     ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
     ConfirmRestoreRunning => { tw: "Cursor 正在執行 — 恢復前必須先關閉（下一步會詢問是否強制關閉）。", cn: "Cursor 正在运行 — 恢复前必须先关闭（下一步会询问是否强制关闭）。", en: "Cursor is running — must close before restore (you will be asked to force quit next)." },
+    ConfirmDeepClean => { tw: "將刪除 state.vscdb（AI 聊天／登入相關／UI 狀態）。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 state.vscdb（AI 聊天／登录相关／UI 状态）。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes state.vscdb (AI chats / login-related / UI state). Irreversible without a backup. Continue?" },
     RestoreEditorRunning => { tw: "Cursor 仍在執行，無法寫入設定檔", cn: "Cursor 仍在运行，无法写入配置文件", en: "Cursor still running — cannot write config files" },
+    DataStillLocked => { tw: "資料檔仍被鎖定 — 請手動關閉 Cursor 後再試", cn: "数据文件仍被锁定 — 请手动关闭 Cursor 后再试", en: "Data files still locked — close Cursor manually and retry" },
+    RestoreVerified => { tw: "已驗證檔案大小相符", cn: "已验证文件大小相符", en: "Verified file sizes match" },
+    DeleteVerified => { tw: "已確認備份資料夾已刪除", cn: "已确认备份文件夹已删除", en: "Confirmed backup folder removed" },
     ConfirmYes => { tw: "確定", cn: "确定", en: "Confirm" },
     ConfirmNo => { tw: "取消", cn: "取消", en: "Cancel" },
     MouseHint => { tw: "滑鼠點選 / ↑↓ Enter", cn: "鼠标点选 / ↑↓ Enter", en: "Click / ↑↓ Enter" },
@@ -128,8 +132,10 @@ tr! {
     DeleteMultiHint => { tw: "空白鍵勾選要刪的項目後 Enter；直接 Enter／Esc＝返回（不用勾選「返回」）", cn: "空格键勾选要删的项目后 Enter；直接 Enter／Esc＝返回（不用勾选「返回」）", en: "Space-check items then Enter to delete; bare Enter / Esc = back" },
     DeleteDone => { tw: "已刪除備份", cn: "已删除备份", en: "Backup deleted" },
     DeleteFail => { tw: "刪除失敗", cn: "删除失败", en: "Delete failed" },
-    RestoreDone => { tw: "恢復完成 — 請重啟 Cursor", cn: "恢复完成 — 请重启 Cursor", en: "Restore done — please restart Cursor" },
+    RestoreDone => { tw: "恢復完成（已驗證）", cn: "恢复完成（已验证）", en: "Restore done (verified)" },
     RestoreFail => { tw: "恢復失敗", cn: "恢复失败", en: "Restore failed" },
+    RelaunchOk => { tw: "已重新開啟 Cursor", cn: "已重新打开 Cursor", en: "Relaunched Cursor" },
+    RelaunchFail => { tw: "無法自動開啟 Cursor（請手動開啟）", cn: "无法自动打开 Cursor（请手动打开）", en: "Could not relaunch Cursor — open it manually" },
 }
 
 pub fn risk_tag(risk: crate::paths::Risk) -> &'static str {
@@ -169,17 +175,17 @@ pub fn plan_conservative(size: &str) -> String {
 
 pub fn plan_standard(size: &str) -> String {
     match lang() {
-        Lang::ZhTw => format!("標準清理 — 安全+編輯歷史（約 {size}）"),
-        Lang::ZhCn => format!("标准清理 — 安全+编辑历史（约 {size}）"),
-        Lang::En => format!("Standard — safe + history (~{size})"),
+        Lang::ZhTw => format!("標準清理 — 安全+編輯歷史（不動 state／設定／專案）（約 {size}）"),
+        Lang::ZhCn => format!("标准清理 — 安全+编辑历史（不动 state／配置／项目）（约 {size}）"),
+        Lang::En => format!("Standard — safe + history (keeps state/settings/projects) (~{size})"),
     }
 }
 
 pub fn plan_deep(size: &str) -> String {
     match lang() {
-        Lang::ZhTw => format!("深度清理 — 含 state.vscdb（約 {size}）"),
-        Lang::ZhCn => format!("深度清理 — 含 state.vscdb（约 {size}）"),
-        Lang::En => format!("Deep — includes state.vscdb (~{size})"),
+        Lang::ZhTw => format!("深度清理 — 含 state.vscdb（聊天／登入相關）（約 {size}）"),
+        Lang::ZhCn => format!("深度清理 — 含 state.vscdb（聊天／登录相关）（约 {size}）"),
+        Lang::En => format!("Deep — includes state.vscdb (chats / login-related) (~{size})"),
     }
 }
 
@@ -212,6 +218,29 @@ pub fn fmt_partial(size: &str, n: usize) -> String {
         Lang::ZhTw => format!("{} {}（{} 個檔案被鎖）", t(Msg::Partial), size, n),
         Lang::ZhCn => format!("{} {}（{} 个文件被锁）", t(Msg::Partial), size, n),
         Lang::En => format!("{} {} ({} file(s) locked)", t(Msg::Partial), size, n),
+    }
+}
+
+pub fn fmt_clean_residual(freed: &str, remaining: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!(
+            "{} {}（刪後仍殘留 {} — 可能未完全關閉）",
+            t(Msg::Partial),
+            freed,
+            remaining
+        ),
+        Lang::ZhCn => format!(
+            "{} {}（删后仍残留 {} — 可能未完全关闭）",
+            t(Msg::Partial),
+            freed,
+            remaining
+        ),
+        Lang::En => format!(
+            "{} {} ({} still left — may not be fully closed)",
+            t(Msg::Partial),
+            freed,
+            remaining
+        ),
     }
 }
 

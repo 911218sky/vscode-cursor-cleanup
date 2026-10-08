@@ -1,10 +1,11 @@
 use crate::backup::{self, sanitize_backup_name, BackupInfo};
 use crate::cleanup::{
-    collect_stats, force_quit_editor, is_editor_running, run_target, TargetStat,
+    collect_stats, force_quit_editor, is_editor_running, launch_editor, run_target,
+    wait_until_data_unlocked, TargetStat,
 };
 use crate::fsutil::{fmt_size, path_size};
 use crate::i18n::{self, t, Lang, Msg};
-use crate::paths::{Editor, Risk};
+use crate::paths::{plan_target_indices, Editor, Risk};
 use crate::tui::widgets::{
     checkbox_items, draw_banner, draw_confirm, draw_input_field, draw_progress, draw_scan_table,
     draw_scanning, icons_for_screen, list_items, menu_list, mouse_to_index, status_line,
@@ -50,6 +51,14 @@ enum PendingWork {
 enum ConfirmAction {
     DeleteBackups(Vec<BackupInfo>),
     Restore(BackupInfo),
+    /// Extra confirm before cleaning High-risk targets (state.vscdb).
+    Clean {
+        editor: Editor,
+        root: PathBuf,
+        total: u64,
+        stats: Vec<TargetStat>,
+        selected: Vec<usize>,
+    },
     ForceQuit {
         editor: Editor,
         then: Box<PendingWork>,
@@ -112,6 +121,8 @@ enum Screen {
         step: usize,
         freed_total: u64,
         log: Vec<String>,
+        /// True when any clean step reported errors / residual bytes.
+        any_errors: bool,
         summary_done: bool,
         finish_at: u64,
     },
@@ -125,6 +136,8 @@ pub struct App {
     status: StatusMsg,
     pub should_quit: bool,
     pub did_work: bool,
+    /// Set when the user confirmed force-quit; relaunch Cursor after successful work.
+    relaunch_after: bool,
     list_hit_area: Rect,
     frame: u64,
     scan_at: u64,
@@ -145,6 +158,7 @@ impl App {
             status: StatusMsg::None,
             should_quit: false,
             did_work: false,
+            relaunch_after: false,
             list_hit_area: Rect::default(),
             frame: 0,
             scan_at: 0,
@@ -224,6 +238,7 @@ impl App {
             step,
             freed_total,
             log,
+            any_errors,
             summary_done,
             finish_at,
             ..
@@ -239,8 +254,14 @@ impl App {
                 let title = i18n::target_title(target.kind);
                 let result = run_target(&root, target);
                 let new_freed = freed_total + result.freed;
-                let line = if result.errors == 0 {
+                let step_err = result.errors > 0;
+                let line = if !step_err {
                     format!("✔ {title}  {}", fmt_size(result.freed))
+                } else if result.remaining > 0 {
+                    i18n::fmt_clean_residual(
+                        &fmt_size(result.freed),
+                        &fmt_size(result.remaining),
+                    )
                 } else {
                     i18n::fmt_partial(&fmt_size(result.freed), result.errors)
                 };
@@ -255,6 +276,7 @@ impl App {
                     step: step + 1,
                     freed_total: new_freed,
                     log: new_log,
+                    any_errors: any_errors || step_err,
                     summary_done: false,
                     finish_at: 0,
                 };
@@ -268,7 +290,12 @@ impl App {
                     &fmt_size(freed_total),
                 ));
                 self.did_work = true;
-                self.status = StatusMsg::Ok(t(Msg::AllDone).to_string());
+                if any_errors {
+                    self.relaunch_after = false;
+                    self.status = StatusMsg::Warn(t(Msg::Partial).to_string());
+                } else {
+                    self.status = StatusMsg::Ok(t(Msg::AllDone).to_string());
+                }
                 self.screen = Screen::Progress {
                     editor,
                     root,
@@ -278,6 +305,7 @@ impl App {
                     step,
                     freed_total,
                     log: new_log,
+                    any_errors,
                     summary_done: true,
                     finish_at: self.frame + 15,
                 };
@@ -286,6 +314,11 @@ impl App {
         }
 
         if self.frame >= finish_at {
+            if !any_errors {
+                self.maybe_relaunch();
+            } else {
+                self.relaunch_after = false;
+            }
             self.screen = Screen::MainMenu;
             self.reset_list(4);
         }
@@ -297,7 +330,7 @@ impl App {
             .filter(|s| matches!(s.target.risk, Risk::Safe))
             .map(|s| s.bytes)
             .sum();
-        let std: u64 = stats
+        let standard: u64 = stats
             .iter()
             .filter(|s| matches!(s.target.risk, Risk::Safe | Risk::Medium))
             .map(|s| s.bytes)
@@ -305,11 +338,68 @@ impl App {
         let deep: u64 = stats.iter().map(|s| s.bytes).sum();
         vec![
             i18n::plan_conservative(&fmt_size(safe)),
-            i18n::plan_standard(&fmt_size(std)),
+            i18n::plan_standard(&fmt_size(standard)),
             i18n::plan_deep(&fmt_size(deep)),
             t(Msg::PlanCustom).to_string(),
             t(Msg::Back).to_string(),
         ]
+    }
+
+    fn selection_includes_high(stats: &[TargetStat], selected: &[usize]) -> bool {
+        selected.iter().any(|&i| {
+            stats
+                .get(i)
+                .map(|s| matches!(s.target.risk, Risk::High))
+                .unwrap_or(false)
+        })
+    }
+
+    /// Start a clean after optional deep-confirm and force-quit confirm.
+    fn begin_clean(
+        &mut self,
+        editor: Editor,
+        root: PathBuf,
+        total: u64,
+        stats: Vec<TargetStat>,
+        selected: Vec<usize>,
+    ) {
+        if Self::selection_includes_high(&stats, &selected) {
+            let return_to = self.screen.clone();
+            self.screen = Screen::Confirm {
+                prompt: t(Msg::ConfirmDeepClean).to_string(),
+                action: ConfirmAction::Clean {
+                    editor,
+                    root,
+                    total,
+                    stats,
+                    selected,
+                },
+                return_to: Box::new(return_to),
+            };
+            self.reset_list(2);
+            return;
+        }
+        self.proceed_clean(editor, root, total, stats, selected);
+    }
+
+    fn proceed_clean(
+        &mut self,
+        editor: Editor,
+        root: PathBuf,
+        total: u64,
+        stats: Vec<TargetStat>,
+        selected: Vec<usize>,
+    ) {
+        let then = PendingWork::ExecuteClean {
+            editor,
+            root: root.clone(),
+            total,
+            stats: stats.clone(),
+            selected: selected.clone(),
+        };
+        if self.ensure_editor_or_confirm(editor, then) {
+            self.execute_clean(editor, root, total, stats, selected);
+        }
     }
 
     fn scan_screen(
@@ -441,9 +531,35 @@ impl App {
                 editor.display_name()
             ));
         } else {
+            self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::ForceQuitFail).to_string());
         }
         ok
+    }
+
+    /// After a successful clean/restore/backup that followed force-quit, relaunch Cursor.
+    fn maybe_relaunch(&mut self) {
+        if !self.relaunch_after {
+            return;
+        }
+        self.relaunch_after = false;
+        if launch_editor(Editor::Cursor) {
+            let suffix = t(Msg::RelaunchOk);
+            self.status = match std::mem::replace(&mut self.status, StatusMsg::None) {
+                StatusMsg::Ok(s) => StatusMsg::Ok(format!("{s} — {suffix}")),
+                other => {
+                    let _ = other;
+                    StatusMsg::Ok(suffix.to_string())
+                }
+            };
+        } else {
+            let suffix = t(Msg::RelaunchFail);
+            self.status = match std::mem::replace(&mut self.status, StatusMsg::None) {
+                StatusMsg::Ok(s) => StatusMsg::Warn(format!("{s} — {suffix}")),
+                StatusMsg::Warn(s) => StatusMsg::Warn(format!("{s} — {suffix}")),
+                _ => StatusMsg::Warn(suffix.to_string()),
+            };
+        }
     }
 
     fn continue_pending(&mut self, work: PendingWork) {
@@ -464,7 +580,8 @@ impl App {
                 include_state,
                 custom_name,
             } => {
-                self.run_backup(include_state, custom_name);
+                // Already force-quit — do not re-enter ensure_editor_or_confirm.
+                self.run_backup_now(include_state, custom_name);
             }
         }
     }
@@ -482,25 +599,39 @@ impl App {
 
     fn do_restore(&mut self, info: BackupInfo) {
         if is_editor_running(Editor::Cursor) {
+            self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::RestoreEditorRunning).to_string());
             self.screen = Screen::MainMenu;
             self.reset_list(4);
             return;
         }
         match backup::restore_backup(&info) {
-            Ok(()) => {
+            Ok(outcome) => {
                 self.did_work = true;
-                self.status = StatusMsg::Ok(format!(
+                let mut msg = format!(
                     "{} — {}",
                     t(Msg::RestoreDone),
-                    t(Msg::PreRestoreBackup)
-                ));
+                    t(Msg::RestoreVerified)
+                );
+                if outcome.did_pre_backup {
+                    msg = format!("{msg} — {}", t(Msg::PreRestoreBackup));
+                }
+                self.status = StatusMsg::Ok(msg);
+                self.maybe_relaunch();
                 self.screen = Screen::MainMenu;
                 self.reset_list(4);
             }
             Err(e) => {
-                let msg = if e.to_string().contains("cursor still running") {
+                self.relaunch_after = false;
+                let es = e.to_string();
+                let msg = if es.contains("cursor still running") {
                     t(Msg::RestoreEditorRunning).to_string()
+                } else if es.contains("data still locked") {
+                    t(Msg::DataStillLocked).to_string()
+                } else if es.contains("state sidecars still present") {
+                    format!("{}: WAL/SHM still locked", t(Msg::RestoreFail))
+                } else if es.contains("restore verify failed") || es.contains("size mismatch") {
+                    format!("{}: size mismatch", t(Msg::RestoreFail))
                 } else {
                     format!("{}: {e}", t(Msg::RestoreFail))
                 };
@@ -522,6 +653,12 @@ impl App {
         ) {
             return;
         }
+        self.run_backup_now(include_state, custom_name);
+    }
+
+    /// Perform backup without re-checking whether the editor is running.
+    fn run_backup_now(&mut self, include_state: bool, custom_name: Option<String>) {
+        let editor = Editor::Cursor;
         match backup::create_backup(editor, include_state, custom_name.as_deref()) {
             Ok(info) => {
                 self.did_work = true;
@@ -531,8 +668,10 @@ impl App {
                     info.name,
                     fmt_size(info.bytes)
                 ));
+                self.maybe_relaunch();
             }
             Err(e) => {
+                self.relaunch_after = false;
                 self.status = StatusMsg::Warn(format!("{}: {e}", t(Msg::BackupFail)));
             }
         }
@@ -547,28 +686,10 @@ impl App {
         self.scan_at = self.frame + 6;
     }
 
+    /// 0=conservative, 1=standard (safe+history), 2=deep, 3=custom → None
     fn plan_indices(&self, choice: usize, stats: &[TargetStat]) -> Option<Vec<usize>> {
-        match choice {
-            0 => Some(
-                stats
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, s)| matches!(s.target.risk, Risk::Safe))
-                    .map(|(i, _)| i)
-                    .collect(),
-            ),
-            1 => Some(
-                stats
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, s)| matches!(s.target.risk, Risk::Safe | Risk::Medium))
-                    .map(|(i, _)| i)
-                    .collect(),
-            ),
-            2 => Some((0..stats.len()).collect()),
-            3 => None, // custom
-            _ => None,
-        }
+        let risks: Vec<Risk> = stats.iter().map(|s| s.target.risk).collect();
+        plan_target_indices(choice, &risks)
     }
 
     fn open_restore_manage(&mut self) {
@@ -591,6 +712,14 @@ impl App {
         stats: Vec<TargetStat>,
         selected: Vec<usize>,
     ) {
+        // Process may already be gone without force-quit — still wait for locks.
+        if !wait_until_data_unlocked(editor, true) {
+            self.relaunch_after = false;
+            self.status = StatusMsg::Warn(t(Msg::DataStillLocked).to_string());
+            self.screen = Screen::MainMenu;
+            self.reset_list(4);
+            return;
+        }
         self.screen = Screen::Progress {
             editor,
             root,
@@ -600,6 +729,7 @@ impl App {
             step: 0,
             freed_total: 0,
             log: vec![t(Msg::AboutToClean).to_string()],
+            any_errors: false,
             summary_done: false,
             finish_at: 0,
         };
@@ -650,6 +780,7 @@ impl App {
                 let root = root.clone();
                 let total = *total;
                 let stats = stats.clone();
+                // Labels: 0 conservative, 1 standard, 2 deep, 3 custom, 4 back
                 if idx == 4 {
                     self.screen = Screen::MainMenu;
                     self.reset_list(4);
@@ -673,16 +804,7 @@ impl App {
                         self.screen = Screen::MainMenu;
                         self.reset_list(4);
                     } else {
-                        let then = PendingWork::ExecuteClean {
-                            editor,
-                            root: root.clone(),
-                            total,
-                            stats: stats.clone(),
-                            selected: sel.clone(),
-                        };
-                        if self.ensure_editor_or_confirm(editor, then) {
-                            self.execute_clean(editor, root, total, stats, sel);
-                        }
+                        self.begin_clean(editor, root, total, stats, sel);
                     }
                 }
             }
@@ -722,16 +844,7 @@ impl App {
                         // (re-confirming Clean there would duplicate the last index).
                         self.screen = Self::scan_screen(editor, root.clone(), total, stats.clone());
                         self.reset_list(5);
-                        let then = PendingWork::ExecuteClean {
-                            editor,
-                            root: root.clone(),
-                            total,
-                            stats: stats.clone(),
-                            selected: selected.clone(),
-                        };
-                        if self.ensure_editor_or_confirm(editor, then) {
-                            self.execute_clean(editor, root, total, stats, selected);
-                        }
+                        self.begin_clean(editor, root, total, stats, selected);
                     }
                 } else {
                     let default = if matches!(stats[item_idx].target.risk, Risk::Safe)
@@ -820,6 +933,8 @@ impl App {
                 let action = action.clone();
                 let return_to = return_to.clone();
                 if idx == 1 {
+                    // Cancel force-quit / other confirms — never leave relaunch sticky.
+                    self.relaunch_after = false;
                     self.screen = *return_to;
                     let len = self.current_labels().len().max(1);
                     self.reset_list(len);
@@ -835,8 +950,9 @@ impl App {
                                 Ok(()) => {
                                     self.did_work = true;
                                     self.status = StatusMsg::Ok(format!(
-                                        "{} · {}",
+                                        "{} — {} · {}",
                                         t(Msg::DeleteDone),
+                                        t(Msg::DeleteVerified),
                                         info.label()
                                     ));
                                 }
@@ -852,8 +968,18 @@ impl App {
                         self.screen = Screen::MainMenu;
                         self.reset_list(4);
                     }
+                    ConfirmAction::Clean {
+                        editor,
+                        root,
+                        total,
+                        stats,
+                        selected,
+                    } => {
+                        self.proceed_clean(editor, root, total, stats, selected);
+                    }
                     ConfirmAction::ForceQuit { editor, then } => {
                         // Draw once, then tick_force_quitting() performs the (blocking) kill.
+                        self.relaunch_after = true;
                         self.status = StatusMsg::Warn(t(Msg::ForceQuitting).to_string());
                         self.screen = Screen::ForceQuitting {
                             editor,
@@ -1050,6 +1176,14 @@ impl App {
             // Don't abort mid force-quit or mid-clean (partial deletes).
             Screen::ForceQuitting { .. } => return,
             Screen::Progress { summary_done, .. } if !summary_done => return,
+            Screen::Progress {
+                summary_done: true,
+                ..
+            } => {
+                // Leaving the post-clean summary early — do not sticky-relaunch later.
+                self.relaunch_after = false;
+                Screen::MainMenu
+            }
             Screen::Scanning { .. } | Screen::ScanAndPlan { .. } | Screen::BackupMode => {
                 Screen::MainMenu
             }
@@ -1065,7 +1199,10 @@ impl App {
             Screen::RestorePick { backups } | Screen::DeleteMulti { backups } => {
                 Screen::RestoreManage { backups }
             }
-            Screen::Confirm { return_to, .. } => *return_to.clone(),
+            Screen::Confirm { return_to, .. } => {
+                self.relaunch_after = false;
+                *return_to.clone()
+            }
             _ => Screen::MainMenu,
         };
         self.screen = next;

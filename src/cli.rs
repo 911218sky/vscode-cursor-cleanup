@@ -173,26 +173,34 @@ fn idx_risk(stats: &[TargetStat], pred: impl Fn(Risk) -> bool) -> Vec<usize> {
 }
 
 /// Non-interactive clean (`--yes`): safe items only, skips if editor is running.
-pub fn run_yes_clean(editor: Editor) {
+/// Returns `true` only when clean ran without per-target errors.
+pub fn run_yes_clean(editor: Editor) -> bool {
     let Some((root, total, stats)) = collect_stats(editor) else {
-        return;
+        warn(&i18n::fmt_no_resolve(editor.display_name()));
+        return false;
     };
     if !root.exists() {
-        return;
+        warn(&i18n::fmt_no_dir(
+            editor.display_name(),
+            &root.display().to_string(),
+        ));
+        return false;
     }
     print_scan(editor, &root, total, &stats);
 
     if is_editor_running(editor) {
         warn(t(Msg::EditorRunningAbort));
-        return;
+        return false;
     }
 
     let selected = idx_risk(&stats, |r| matches!(r, Risk::Safe));
     if selected.is_empty() {
-        return;
+        ok(t(Msg::AllDone));
+        return true;
     }
 
     let mut freed_total = 0u64;
+    let mut any_errors = false;
     for &idx in &selected {
         let target = &stats[idx].target;
         let title = i18n::target_title(target.kind);
@@ -207,13 +215,24 @@ pub fn run_yes_clean(editor: Editor) {
                 fmt_size(result.freed)
             );
         } else {
-            println!(
-                "{}",
-                ansi::yellow_bold(&i18n::fmt_partial(
-                    &fmt_size(result.freed),
-                    result.errors
-                ))
-            );
+            any_errors = true;
+            if result.remaining > 0 {
+                println!(
+                    "{}",
+                    ansi::yellow_bold(&i18n::fmt_clean_residual(
+                        &fmt_size(result.freed),
+                        &fmt_size(result.remaining)
+                    ))
+                );
+            } else {
+                println!(
+                    "{}",
+                    ansi::yellow_bold(&i18n::fmt_partial(
+                        &fmt_size(result.freed),
+                        result.errors
+                    ))
+                );
+            }
         }
     }
 
@@ -233,4 +252,5 @@ pub fn run_yes_clean(editor: Editor) {
         "  {}",
         ansi::bright_green("────────────────────────────────")
     );
+    !any_errors
 }
