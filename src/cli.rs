@@ -84,7 +84,7 @@ pub fn print_banner() {
         "{}",
         ansi::cyan(&format!(
             "│{}│",
-            pad_center(&format!("VSCode / Cursor  ·  v{VERSION}"), w)
+            pad_center(&format!("Cursor  ·  v{VERSION}"), w)
         ))
     );
     println!(
@@ -121,18 +121,6 @@ pub fn pause_menu() {
     let _ = io::stdout().flush();
     let mut s = String::new();
     let _ = io::stdin().read_line(&mut s);
-}
-
-pub fn parse_editors(app: &str) -> Option<Vec<Editor>> {
-    match app {
-        "cursor" => Some(vec![Editor::Cursor]),
-        "vscode" => Some(vec![Editor::VsCode]),
-        "both" => Some(vec![Editor::Cursor, Editor::VsCode]),
-        other => {
-            warn(&format!("{}: {other}", t(Msg::BadApp)));
-            None
-        }
-    }
 }
 
 pub fn print_scan(editor: Editor, root: &std::path::Path, total: u64, stats: &[TargetStat]) {

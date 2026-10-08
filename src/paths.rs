@@ -3,50 +3,36 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Editor {
     Cursor,
-    VsCode,
 }
 
 impl Editor {
     pub fn display_name(self) -> &'static str {
-        match self {
-            Editor::Cursor => "Cursor",
-            Editor::VsCode => "VSCode",
-        }
+        "Cursor"
     }
 
     pub fn slug(self) -> &'static str {
-        match self {
-            Editor::Cursor => "cursor",
-            Editor::VsCode => "vscode",
-        }
+        "cursor"
     }
 
     /// Process names for Unix detect/kill. Windows uses `windows_images` instead.
     #[cfg(not(windows))]
     pub fn process_names(self) -> &'static [&'static str] {
-        match self {
-            Editor::Cursor => &["Cursor", "cursor"],
-            Editor::VsCode => &["Code", "code"],
-        }
+        let _ = self;
+        &["Cursor", "cursor"]
     }
 
     pub fn data_dir(self) -> Option<PathBuf> {
+        let _ = self;
         #[cfg(windows)]
         {
             let base = std::env::var_os("APPDATA").map(PathBuf::from)?;
-            Some(match self {
-                Editor::Cursor => base.join("Cursor"),
-                Editor::VsCode => base.join("Code"),
-            })
+            Some(base.join("Cursor"))
         }
         #[cfg(target_os = "macos")]
         {
             let home = std::env::var_os("HOME").map(PathBuf::from)?;
             let support = home.join("Library").join("Application Support");
-            Some(match self {
-                Editor::Cursor => support.join("Cursor"),
-                Editor::VsCode => support.join("Code"),
-            })
+            Some(support.join("Cursor"))
         }
         #[cfg(all(unix, not(target_os = "macos")))]
         {
@@ -54,10 +40,7 @@ impl Editor {
             let base = std::env::var_os("XDG_CONFIG_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| home.join(".config"));
-            Some(match self {
-                Editor::Cursor => base.join("Cursor"),
-                Editor::VsCode => base.join("Code"),
-            })
+            Some(base.join("Cursor"))
         }
         #[cfg(not(any(windows, unix)))]
         {
@@ -215,7 +198,6 @@ mod tests {
     #[test]
     fn editor_slugs_stable() {
         assert_eq!(Editor::Cursor.slug(), "cursor");
-        assert_eq!(Editor::VsCode.slug(), "vscode");
     }
 
     #[test]
@@ -226,4 +208,3 @@ mod tests {
         assert_eq!(ts.matches('-').count(), 6);
     }
 }
-

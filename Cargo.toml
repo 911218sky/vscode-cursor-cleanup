@@ -1,8 +1,8 @@
 [package]
 name = "cursor-cleanup"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
-description = "Interactive cleaner for VSCode / Cursor"
+description = "Interactive cleaner for Cursor"
 license = "MIT"
 repository = "https://github.com/911218sky/vscode-cursor-cleanup"
 readme = "README.md"

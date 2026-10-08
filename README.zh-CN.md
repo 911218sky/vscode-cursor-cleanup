@@ -3,12 +3,12 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.3.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)
 
 **双击即可用的互动清理工具** · 也支持 CLI  
 默认界面语言：**繁体中文**；可选简体 / English
 
-清理 VSCode / Cursor 缓存与膨胀的 `state.vscdb`
+清理 Cursor 缓存与膨胀的 `state.vscdb`
 
 [繁體中文](./README.md) · [English](./README.en.md) · [文档(英文)](./docs/guide.md)
 
@@ -23,7 +23,7 @@
 
 上游 [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) 是 **macOS Bash 脚本**，互动清理 VSCode／Cursor 缓存与 `state.vscdb`，并用 ZIP 备份。
 
-本项目在「同一类问题」上做了这些升级：
+本项目改为 **仅支持 Cursor**，并在同一类问题上做了这些升级：
 
 | | 上游 ThendCN | 本项目 |
 |--|--------------|-------------------|
@@ -60,16 +60,15 @@
 
 ```powershell
 cursor-cleanup.exe --lang zh-CN
-cursor-cleanup.exe --lang zh-CN --scan --app cursor
-cursor-cleanup.exe --app cursor --yes
+cursor-cleanup.exe --lang zh-CN --scan
+cursor-cleanup.exe --yes
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `--lang zh-TW\|zh-CN\|en` | 语言（默认 `zh-TW`） |
-| `--app cursor\|vscode\|both` | 指定应用 |
 | `--scan` | 只扫描 |
-| `--yes` | 自动清安全项（需 `--app`；应用运行中会跳过） |
+| `--yes` | 自动清安全项（Cursor 运行中会跳过） |
 | `--no-pause` | 结束不暂停 |
 
 ## 清什么？

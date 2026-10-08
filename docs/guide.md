@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.3.1** (Rust interactive TUI with mouse support)
+Version: **v0.4.0** (Cursor-only; confirm before force-quit)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -20,7 +20,7 @@ Upstream: [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-curs
 | Restore | Manual unzip in docs | Dedicated Restore — pick a folder |
 | Release | Clone scripts | GitHub Actions multi-platform binaries |
 
-Same mission: safe tiered cleanup without touching project code or installed extensions.
+Same mission, but **Cursor-only**: safe tiered cleanup without touching project code or installed extensions.
 
 ## Two ways to run
 
@@ -48,19 +48,19 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 
 ### Backup & restore
 
-- Location: `{exe_dir}/backups/{cursor|vscode}-backup-{name}/`
+- Location: `{exe_dir}/backups/cursor-backup-{name}/`
 - Name: type your own label, or press Enter for the default timestamp
 - Always includes: `settings.json`, `keybindings.json`, `snippets/`
 - Optional: `state.vscdb`
 - Restore / delete: restore one, or Space-select many and Enter to delete
-- Prefer closing the editor yourself before restore when convenient
+- Prefer closing Cursor yourself before restore when convenient
 
 ### 2. CLI
 
 ```powershell
 .\cursor-cleanup.exe
-.\cursor-cleanup.exe --lang en --scan --app cursor
-.\cursor-cleanup.exe --app cursor --yes
+.\cursor-cleanup.exe --lang en --scan
+.\cursor-cleanup.exe --yes
 .\cursor-cleanup.exe --help
 ```
 
@@ -68,9 +68,8 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 |------|---------|
 | (none) | Full interactive menu |
 | `--lang zh-TW\|zh-CN\|en` | UI language (default `zh-TW`) |
-| `--app cursor\|vscode\|both` | Target app |
 | `--scan` | Scan sizes only |
-| `--yes` | Non-interactive, safe items only (requires `--app`; skips if app running) |
+| `--yes` | Non-interactive, safe items only (skips if Cursor is running) |
 | `--no-pause` | Do not pause on exit |
 
 ## What gets cleaned?
@@ -85,15 +84,15 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 
 ## Data paths
 
-| Platform | Cursor | VSCode |
-|----------|--------|--------|
-| Windows | `%APPDATA%\Cursor` | `%APPDATA%\Code` |
-| macOS | `~/Library/Application Support/Cursor` | `~/Library/Application Support/Code` |
-| Linux | `~/.config/Cursor` | `~/.config/Code` |
+| Platform | Cursor |
+|----------|--------|
+| Windows | `%APPDATA%\Cursor` |
+| macOS | `~/Library/Application Support/Cursor` |
+| Linux | `~/.config/Cursor` |
 
 ## Recommendations
 
-1. Quit Cursor / VSCode before cleaning (avoids locked files)
+1. Quit Cursor before cleaning (avoids locked files) — the TUI will ask before force-quit
 2. Prefer **Conservative** for routine use
 3. Only use **Deep** when `state.vscdb` is huge (e.g. > 1GB) and the app feels slow — backup first
 

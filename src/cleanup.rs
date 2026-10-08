@@ -11,15 +11,9 @@ pub struct TargetStat {
     pub bytes: u64,
 }
 
-/// Process images whose data dir matches the selected editor.
-/// Intentionally excludes VS Code Insiders — cleaning stable `Code` must not
-/// kill Insiders (separate data directory).
 #[cfg(windows)]
-fn windows_images(editor: Editor) -> &'static [&'static str] {
-    match editor {
-        Editor::Cursor => &["Cursor.exe"],
-        Editor::VsCode => &["Code.exe"],
-    }
+fn windows_images(_editor: Editor) -> &'static [&'static str] {
+    &["Cursor.exe"]
 }
 
 #[cfg(windows)]

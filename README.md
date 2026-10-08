@@ -5,12 +5,12 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.3.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)
 
 **雙擊即可用的互動清理工具** · 也支援 CLI  
 預設介面：**繁體中文**（可切換簡體／English）
 
-清理 VSCode / Cursor 快取與膨脹的 `state.vscdb`
+清理 Cursor 快取與膨脹的 `state.vscdb`
 
 [English](./README.en.md) · [简体中文](./README.zh-CN.md) · [Docs (EN)](./docs/guide.md)
 
@@ -25,7 +25,7 @@
 
 上游 [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) 是 **macOS Bash 腳本**，互動清理 VSCode／Cursor 快取與 `state.vscdb`，並用 ZIP 備份。
 
-本專案在「同一類問題」上做了這些升級：
+本專案改為 **僅支援 Cursor**，並在同一類問題上做了這些升級：
 
 | | 上游 ThendCN | 本專案 |
 |--|--------------|-------------------|
@@ -62,17 +62,16 @@
 
 ```powershell
 cursor-cleanup.exe
-cursor-cleanup.exe --lang zh-CN --app cursor
-cursor-cleanup.exe --lang en --scan --app cursor
-cursor-cleanup.exe --app cursor --yes
+cursor-cleanup.exe --lang zh-CN
+cursor-cleanup.exe --lang en --scan
+cursor-cleanup.exe --yes
 ```
 
 | 參數 | 說明 |
 |------|------|
 | `--lang zh-TW\|zh-CN\|en` | 語言（預設 `zh-TW`） |
-| `--app cursor\|vscode\|both` | 指定應用 |
 | `--scan` | 只掃描 |
-| `--yes` | 自動清安全項（需 `--app`；應用執行中會略過） |
+| `--yes` | 自動清安全項（Cursor 執行中會略過） |
 | `--no-pause` | 結束不暫停 |
 
 ## 清什麼？

@@ -25,7 +25,7 @@ pub fn draw_banner(f: &mut Frame, area: Rect, _subtitle: &str, frame: u64, anima
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let title_line = theme::title_line("VSCode / Cursor");
+    let title_line = theme::title_line("Cursor");
     let marker = if animate {
         theme::spinner(frame)
     } else {
@@ -459,11 +459,9 @@ pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
     let defaults: &[&str] = match screen {
         MenuScreen::Language => &["繁", "简", "En"],
         MenuScreen::MainMenu => &["✦", "◈", "↺", "⏻"],
-        MenuScreen::PickApp => &["◉", "◉", "◆", "←"],
-        MenuScreen::Plan => &["◉", "◆", "✦", "⚙", "→", "←"],
+        MenuScreen::Plan => &["◉", "◆", "✦", "⚙", "←"],
         MenuScreen::CustomClean => &["✔", "→", "←"],
         MenuScreen::BackupMode => &["◈", "◉", "←"],
-        MenuScreen::RestoreFilter => &["◉", "◉", "◆", "←"],
         MenuScreen::RestoreManage => &["↺", "✕", "←"],
         MenuScreen::Confirm => &["✔", "✕"],
         MenuScreen::Generic => &[],
@@ -476,11 +474,9 @@ pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
 pub enum MenuScreen {
     Language,
     MainMenu,
-    PickApp,
     Plan,
     CustomClean,
     BackupMode,
-    RestoreFilter,
     RestoreManage,
     Confirm,
     Generic,

@@ -29,20 +29,37 @@ pub enum StatusMsg {
     Dim(String),
 }
 
+/// Work to resume after the user confirms force-quitting Cursor.
+#[derive(Clone)]
+enum PendingWork {
+    ExecuteClean {
+        editor: Editor,
+        root: PathBuf,
+        total: u64,
+        stats: Vec<TargetStat>,
+        selected: Vec<usize>,
+    },
+    Restore(BackupInfo),
+    Backup {
+        include_state: bool,
+        custom_name: Option<String>,
+    },
+}
+
 #[derive(Clone)]
 enum ConfirmAction {
     DeleteBackups(Vec<BackupInfo>),
     Restore(BackupInfo),
+    ForceQuit {
+        editor: Editor,
+        then: Box<PendingWork>,
+    },
 }
 
 #[derive(Clone)]
 enum Screen {
     Language,
     MainMenu,
-    PickApp {
-        use_back: bool,
-        for_backup: bool,
-    },
     ScanAndPlan {
         editor: Editor,
         root: PathBuf,
@@ -59,29 +76,28 @@ enum Screen {
         idx: usize,
         selected: Vec<usize>,
     },
-    BackupMode {
-        editors: Vec<Editor>,
-    },
+    BackupMode,
     BackupName {
-        editors: Vec<Editor>,
         include_state: bool,
     },
-    RestoreFilter,
     RestoreManage {
-        filter: Option<Editor>,
         backups: Vec<BackupInfo>,
     },
     RestorePick {
-        filter: Option<Editor>,
         backups: Vec<BackupInfo>,
     },
     DeleteMulti {
-        filter: Option<Editor>,
         backups: Vec<BackupInfo>,
     },
     Confirm {
         prompt: String,
         action: ConfirmAction,
+        return_to: Box<Screen>,
+    },
+    /// Shown for one frame before the blocking force-quit so the UI is not silent.
+    ForceQuitting {
+        editor: Editor,
+        then: Box<PendingWork>,
         return_to: Box<Screen>,
     },
     Scanning {
@@ -110,7 +126,6 @@ pub struct App {
     pub should_quit: bool,
     pub did_work: bool,
     list_hit_area: Rect,
-    pending_editors: Vec<Editor>,
     frame: u64,
     scan_at: u64,
 }
@@ -131,7 +146,6 @@ impl App {
             should_quit: false,
             did_work: false,
             list_hit_area: Rect::default(),
-            pending_editors: Vec::new(),
             frame: 0,
             scan_at: 0,
         }
@@ -139,6 +153,7 @@ impl App {
 
     pub fn tick(&mut self) {
         self.frame += 1;
+        self.tick_force_quitting();
         self.tick_scanning();
         self.tick_progress();
     }
@@ -151,8 +166,28 @@ impl App {
     pub fn wants_animation(&self) -> bool {
         matches!(
             self.screen,
-            Screen::Scanning { .. } | Screen::Progress { .. }
+            Screen::Scanning { .. }
+                | Screen::Progress { .. }
+                | Screen::ForceQuitting { .. }
         )
+    }
+
+    fn tick_force_quitting(&mut self) {
+        let Screen::ForceQuitting {
+            editor,
+            then,
+            return_to,
+        } = self.screen.clone()
+        else {
+            return;
+        };
+        if self.do_force_quit(editor) {
+            self.continue_pending(*then);
+        } else {
+            self.screen = *return_to;
+            let len = self.current_labels().len().max(1);
+            self.reset_list(len);
+        }
     }
 
     fn tick_scanning(&mut self) {
@@ -165,7 +200,7 @@ impl App {
         if let Some((root, total, stats)) = collect_stats(editor) {
             if root.exists() {
                 self.screen = Self::scan_screen(editor, root, total, stats);
-                self.reset_list(6);
+                self.reset_list(5);
                 return;
             }
             self.status = StatusMsg::Warn(i18n::fmt_no_dir(
@@ -175,8 +210,8 @@ impl App {
         } else {
             self.status = StatusMsg::Warn(i18n::fmt_no_resolve(editor.display_name()));
         }
-        self.pending_editors.remove(0);
-        self.advance_next_editor_clean();
+        self.screen = Screen::MainMenu;
+        self.reset_list(4);
     }
 
     fn tick_progress(&mut self) {
@@ -251,7 +286,8 @@ impl App {
         }
 
         if self.frame >= finish_at {
-            self.finish_editor_clean();
+            self.screen = Screen::MainMenu;
+            self.reset_list(4);
         }
     }
 
@@ -272,7 +308,6 @@ impl App {
             i18n::plan_standard(&fmt_size(std)),
             i18n::plan_deep(&fmt_size(deep)),
             t(Msg::PlanCustom).to_string(),
-            t(Msg::PlanSkipApp).to_string(),
             t(Msg::Back).to_string(),
         ]
     }
@@ -337,19 +372,6 @@ impl App {
                 t(Msg::MenuRestore).to_string(),
                 t(Msg::Exit).to_string(),
             ],
-            Screen::PickApp { use_back, .. } => {
-                let last = if *use_back {
-                    t(Msg::Back)
-                } else {
-                    t(Msg::Exit)
-                };
-                vec![
-                    t(Msg::AppCursor).to_string(),
-                    t(Msg::AppVscode).to_string(),
-                    t(Msg::AppBoth).to_string(),
-                    last.to_string(),
-                ]
-            }
             Screen::ScanAndPlan { plan_labels, .. } => plan_labels.clone(),
             Screen::CustomClean { stats, idx, .. } => {
                 if *idx >= stats.len() {
@@ -363,15 +385,9 @@ impl App {
                     t(Msg::Back).to_string(),
                 ]
             }
-            Screen::BackupMode { .. } => vec![
+            Screen::BackupMode => vec![
                 t(Msg::BackupConfigOnly).to_string(),
                 t(Msg::BackupConfigState).to_string(),
-                t(Msg::Back).to_string(),
-            ],
-            Screen::RestoreFilter => vec![
-                t(Msg::AppCursor).to_string(),
-                t(Msg::AppVscode).to_string(),
-                t(Msg::AppAll).to_string(),
                 t(Msg::Back).to_string(),
             ],
             Screen::RestoreManage { .. } => vec![
@@ -396,11 +412,27 @@ impl App {
         }
     }
 
-    fn ensure_editor(&mut self, editor: Editor) -> bool {
+    /// If the editor is not running, returns true so the caller can proceed.
+    /// If it is running, shows a confirm dialog and returns false (caller must wait).
+    fn ensure_editor_or_confirm(&mut self, editor: Editor, then: PendingWork) -> bool {
         if !is_editor_running(editor) {
             return true;
         }
+        let return_to = self.screen.clone();
         self.status = StatusMsg::Warn(i18n::fmt_running(editor.display_name()));
+        self.screen = Screen::Confirm {
+            prompt: format!("{} {}", editor.display_name(), t(Msg::ConfirmForceQuit)),
+            action: ConfirmAction::ForceQuit {
+                editor,
+                then: Box::new(then),
+            },
+            return_to: Box::new(return_to),
+        };
+        self.reset_list(2);
+        false
+    }
+
+    fn do_force_quit(&mut self, editor: Editor) -> bool {
         let ok = force_quit_editor(editor, true);
         if ok {
             self.status = StatusMsg::Ok(format!(
@@ -408,38 +440,87 @@ impl App {
                 t(Msg::ForceQuitOk),
                 editor.display_name()
             ));
-            true
         } else {
             self.status = StatusMsg::Warn(t(Msg::ForceQuitFail).to_string());
-            false
+        }
+        ok
+    }
+
+    fn continue_pending(&mut self, work: PendingWork) {
+        match work {
+            PendingWork::ExecuteClean {
+                editor,
+                root,
+                total,
+                stats,
+                selected,
+            } => {
+                self.execute_clean(editor, root, total, stats, selected);
+            }
+            PendingWork::Restore(info) => {
+                self.run_restore(info);
+            }
+            PendingWork::Backup {
+                include_state,
+                custom_name,
+            } => {
+                self.run_backup(include_state, custom_name);
+            }
         }
     }
 
-    fn start_clean_editors(&mut self, editors: Vec<Editor>) {
-        self.pending_editors = editors;
-        self.advance_next_editor_clean();
+    fn run_restore(&mut self, info: BackupInfo) {
+        match backup::restore_backup(&info) {
+            Ok(()) => {
+                self.did_work = true;
+                self.status = StatusMsg::Ok(format!(
+                    "{} — {}",
+                    t(Msg::RestoreDone),
+                    t(Msg::PreRestoreBackup)
+                ));
+            }
+            Err(e) => {
+                self.status = StatusMsg::Warn(format!("{}: {e}", t(Msg::RestoreFail)));
+            }
+        }
+        self.screen = Screen::MainMenu;
+        self.reset_list(4);
     }
 
-    fn advance_next_editor_clean(&mut self) {
-        let Some(editor) = self.pending_editors.first().copied() else {
-            self.screen = Screen::MainMenu;
-            self.reset_list(4);
+    fn run_backup(&mut self, include_state: bool, custom_name: Option<String>) {
+        let editor = Editor::Cursor;
+        if !self.ensure_editor_or_confirm(
+            editor,
+            PendingWork::Backup {
+                include_state,
+                custom_name: custom_name.clone(),
+            },
+        ) {
             return;
-        };
-        self.screen = Screen::Scanning { editor };
-        self.scan_at = self.frame + 6;
+        }
+        match backup::create_backup(editor, include_state, custom_name.as_deref()) {
+            Ok(info) => {
+                self.did_work = true;
+                self.status = StatusMsg::Ok(format!(
+                    "{} — {} ({})",
+                    t(Msg::BackupDone),
+                    info.name,
+                    fmt_size(info.bytes)
+                ));
+            }
+            Err(e) => {
+                self.status = StatusMsg::Warn(format!("{}: {e}", t(Msg::BackupFail)));
+            }
+        }
+        self.screen = Screen::MainMenu;
+        self.reset_list(4);
     }
 
-    fn finish_editor_clean(&mut self) {
-        if !self.pending_editors.is_empty() {
-            self.pending_editors.remove(0);
-        }
-        if self.pending_editors.is_empty() {
-            self.screen = Screen::MainMenu;
-            self.reset_list(4);
-        } else {
-            self.advance_next_editor_clean();
-        }
+    fn start_clean(&mut self) {
+        self.screen = Screen::Scanning {
+            editor: Editor::Cursor,
+        };
+        self.scan_at = self.frame + 6;
     }
 
     fn plan_indices(&self, choice: usize, stats: &[TargetStat]) -> Option<Vec<usize>> {
@@ -462,8 +543,19 @@ impl App {
             ),
             2 => Some((0..stats.len()).collect()),
             3 => None, // custom
-            4 => Some(vec![]), // skip app
             _ => None,
+        }
+    }
+
+    fn open_restore_manage(&mut self) {
+        let backups = backup::list_backups(Some(Editor::Cursor));
+        if backups.is_empty() {
+            self.status = StatusMsg::Warn(t(Msg::NoBackups).to_string());
+            self.screen = Screen::MainMenu;
+            self.reset_list(4);
+        } else {
+            self.screen = Screen::RestoreManage { backups };
+            self.reset_list(3);
         }
     }
 
@@ -493,11 +585,9 @@ impl App {
         match &self.screen {
             Screen::Language => MenuScreen::Language,
             Screen::MainMenu => MenuScreen::MainMenu,
-            Screen::PickApp { .. } => MenuScreen::PickApp,
             Screen::ScanAndPlan { .. } => MenuScreen::Plan,
             Screen::CustomClean { .. } => MenuScreen::CustomClean,
-            Screen::BackupMode { .. } => MenuScreen::BackupMode,
-            Screen::RestoreFilter => MenuScreen::RestoreFilter,
+            Screen::BackupMode => MenuScreen::BackupMode,
             Screen::RestoreManage { .. } => MenuScreen::RestoreManage,
             Screen::Confirm { .. } => MenuScreen::Confirm,
             _ => MenuScreen::Generic,
@@ -517,51 +607,14 @@ impl App {
                 self.reset_list(4);
             }
             Screen::MainMenu => match idx {
-                0 => {
-                    self.screen = Screen::PickApp {
-                        use_back: false,
-                        for_backup: false,
-                    };
-                    self.reset_list(4);
-                }
+                0 => self.start_clean(),
                 1 => {
-                    self.screen = Screen::PickApp {
-                        use_back: true,
-                        for_backup: true,
-                    };
-                    self.reset_list(4);
+                    self.screen = Screen::BackupMode;
+                    self.reset_list(3);
                 }
-                2 => {
-                    self.screen = Screen::RestoreFilter;
-                    self.reset_list(4);
-                }
+                2 => self.open_restore_manage(),
                 _ => self.should_quit = true,
             },
-            Screen::PickApp {
-                use_back,
-                for_backup,
-            } => {
-                if idx == 3 {
-                    if *use_back {
-                        self.screen = Screen::MainMenu;
-                        self.reset_list(4);
-                    } else {
-                        self.should_quit = true;
-                    }
-                    return;
-                }
-                let editors = match idx {
-                    0 => vec![Editor::Cursor],
-                    1 => vec![Editor::VsCode],
-                    _ => vec![Editor::Cursor, Editor::VsCode],
-                };
-                if *for_backup {
-                    self.screen = Screen::BackupMode { editors };
-                    self.reset_list(3);
-                } else {
-                    self.start_clean_editors(editors);
-                }
-            }
             Screen::ScanAndPlan {
                 editor,
                 root,
@@ -573,19 +626,13 @@ impl App {
                 let root = root.clone();
                 let total = *total;
                 let stats = stats.clone();
-                if idx == 5 {
-                    self.pending_editors.clear();
-                    self.screen = Screen::PickApp {
-                        use_back: false,
-                        for_backup: false,
-                    };
+                if idx == 4 {
+                    self.screen = Screen::MainMenu;
                     self.reset_list(4);
                     return;
                 }
-                if !self.ensure_editor(editor) {
-                    return;
-                }
                 if idx == 3 {
+                    // Browse custom items without quitting; confirm quit when cleaning starts.
                     self.screen = Screen::CustomClean {
                         editor,
                         root,
@@ -597,15 +644,21 @@ impl App {
                     self.reset_list(3);
                     return;
                 }
-                if idx == 4 {
-                    self.finish_editor_clean();
-                    return;
-                }
                 if let Some(sel) = self.plan_indices(idx, &stats) {
                     if sel.is_empty() {
-                        self.finish_editor_clean();
+                        self.screen = Screen::MainMenu;
+                        self.reset_list(4);
                     } else {
-                        self.execute_clean(editor, root, total, stats, sel);
+                        let then = PendingWork::ExecuteClean {
+                            editor,
+                            root: root.clone(),
+                            total,
+                            stats: stats.clone(),
+                            selected: sel.clone(),
+                        };
+                        if self.ensure_editor_or_confirm(editor, then) {
+                            self.execute_clean(editor, root, total, stats, sel);
+                        }
                     }
                 }
             }
@@ -631,7 +684,7 @@ impl App {
                     1 => item_idx += 1,
                     _ => {
                         self.screen = Self::scan_screen(editor, root, total, stats);
-                        self.reset_list(6);
+                        self.reset_list(5);
                         return;
                     }
                 }
@@ -639,9 +692,22 @@ impl App {
                     if selected.is_empty() {
                         self.status = StatusMsg::Dim(t(Msg::NothingSelected).to_string());
                         self.screen = Self::scan_screen(editor, root, total, stats);
-                        self.reset_list(6);
-                    } else if self.ensure_editor(editor) {
-                        self.execute_clean(editor, root, total, stats, selected);
+                        self.reset_list(5);
+                    } else {
+                        // Return to plan on cancel — not the last custom item
+                        // (re-confirming Clean there would duplicate the last index).
+                        self.screen = Self::scan_screen(editor, root.clone(), total, stats.clone());
+                        self.reset_list(5);
+                        let then = PendingWork::ExecuteClean {
+                            editor,
+                            root: root.clone(),
+                            total,
+                            stats: stats.clone(),
+                            selected: selected.clone(),
+                        };
+                        if self.ensure_editor_or_confirm(editor, then) {
+                            self.execute_clean(editor, root, total, stats, selected);
+                        }
                     }
                 } else {
                     let default = if matches!(stats[item_idx].target.risk, Risk::Safe)
@@ -663,68 +729,39 @@ impl App {
                     self.list_state.select(Some(default));
                 }
             }
-            Screen::BackupMode { editors } => {
+            Screen::BackupMode => {
                 if idx == 2 {
-                    self.screen = Screen::PickApp {
-                        use_back: true,
-                        for_backup: true,
-                    };
-                    self.reset_list(4);
-                    return;
-                }
-                let include_state = idx == 1;
-                self.screen = Screen::BackupName {
-                    editors: editors.clone(),
-                    include_state,
-                };
-                self.name_input = Input::default();
-            }
-            Screen::RestoreFilter => {
-                if idx == 3 {
                     self.screen = Screen::MainMenu;
                     self.reset_list(4);
                     return;
                 }
-                let filter = match idx {
-                    0 => Some(Editor::Cursor),
-                    1 => Some(Editor::VsCode),
-                    _ => None,
-                };
-                let backups = backup::list_backups(filter);
-                if backups.is_empty() {
-                    self.status = StatusMsg::Warn(t(Msg::NoBackups).to_string());
-                    self.screen = Screen::RestoreFilter;
-                    self.reset_list(4);
-                } else {
-                    self.screen = Screen::RestoreManage { filter, backups };
-                    self.reset_list(3);
-                }
+                let include_state = idx == 1;
+                self.screen = Screen::BackupName { include_state };
+                self.name_input = Input::default();
             }
-            Screen::RestoreManage { filter, backups } => {
-                let filter = *filter;
+            Screen::RestoreManage { backups } => {
                 let backups = backups.clone();
                 match idx {
                     0 => {
                         let n = backups.len() + 1;
-                        self.screen = Screen::RestorePick { filter, backups };
+                        self.screen = Screen::RestorePick { backups };
                         self.reset_list(n);
                     }
                     1 => {
                         let n = backups.len() + 1;
                         self.checkbox = vec![false; n];
-                        self.screen = Screen::DeleteMulti { filter, backups };
+                        self.screen = Screen::DeleteMulti { backups };
                         self.reset_list(n);
                     }
                     _ => {
-                        self.screen = Screen::RestoreFilter;
+                        self.screen = Screen::MainMenu;
                         self.reset_list(4);
                     }
                 }
             }
-            Screen::RestorePick { filter, backups } => {
+            Screen::RestorePick { backups } => {
                 if idx >= backups.len() {
                     self.screen = Screen::RestoreManage {
-                        filter: *filter,
                         backups: backups.clone(),
                     };
                     self.reset_list(3);
@@ -739,10 +776,9 @@ impl App {
                 };
                 self.reset_list(2);
             }
-            Screen::DeleteMulti { filter, backups } => {
+            Screen::DeleteMulti { backups } => {
                 if idx >= backups.len() {
                     self.screen = Screen::RestoreManage {
-                        filter: *filter,
                         backups: backups.clone(),
                     };
                     self.reset_list(3);
@@ -753,36 +789,20 @@ impl App {
                 }
             }
             Screen::Confirm { action, return_to, .. } => {
+                let action = action.clone();
+                let return_to = return_to.clone();
                 if idx == 1 {
-                    self.screen = *return_to.clone();
+                    self.screen = *return_to;
                     let len = self.current_labels().len().max(1);
                     self.reset_list(len);
                     return;
                 }
-                match action.clone() {
+                match action {
                     ConfirmAction::Restore(info) => {
-                        let editor = match info.app.as_str() {
-                            "vscode" => Editor::VsCode,
-                            _ => Editor::Cursor,
-                        };
-                        if self.ensure_editor(editor) {
-                            match backup::restore_backup(&info) {
-                                Ok(()) => {
-                                    self.did_work = true;
-                                    self.status = StatusMsg::Ok(format!(
-                                        "{} — {}",
-                                        t(Msg::RestoreDone),
-                                        t(Msg::PreRestoreBackup)
-                                    ));
-                                }
-                                Err(e) => {
-                                    self.status =
-                                        StatusMsg::Warn(format!("{}: {e}", t(Msg::RestoreFail)));
-                                }
-                            }
+                        let then = PendingWork::Restore(info.clone());
+                        if self.ensure_editor_or_confirm(Editor::Cursor, then) {
+                            self.run_restore(info);
                         }
-                        self.screen = Screen::MainMenu;
-                        self.reset_list(4);
                     }
                     ConfirmAction::DeleteBackups(infos) => {
                         for info in &infos {
@@ -806,6 +826,15 @@ impl App {
                         }
                         self.screen = Screen::MainMenu;
                         self.reset_list(4);
+                    }
+                    ConfirmAction::ForceQuit { editor, then } => {
+                        // Draw once, then tick_force_quitting() performs the (blocking) kill.
+                        self.status = StatusMsg::Warn(t(Msg::ForceQuitting).to_string());
+                        self.screen = Screen::ForceQuitting {
+                            editor,
+                            then,
+                            return_to,
+                        };
                     }
                 }
             }
@@ -867,13 +896,14 @@ impl App {
         }
 
         match &self.screen {
+            // Ignore input while force-quit is in flight (Esc already blocked in handle_back).
+            Screen::ForceQuitting { .. } => return,
             Screen::BackupName { .. } => self.handle_name_key(key),
-            Screen::DeleteMulti { filter, backups } => {
+            Screen::DeleteMulti { backups } => {
                 let len = backups.len() + 1;
                 match key.code {
                     KeyCode::Esc => {
                         self.screen = Screen::RestoreManage {
-                            filter: *filter,
                             backups: backups.clone(),
                         };
                         self.reset_list(3);
@@ -895,10 +925,10 @@ impl App {
                             .filter(|(i, c)| **c && *i != back_idx)
                             .map(|(i, _)| i)
                             .collect();
-                        if selected.is_empty() || self.checkbox.get(back_idx).copied().unwrap_or(false)
+                        if selected.is_empty()
+                            || self.checkbox.get(back_idx).copied().unwrap_or(false)
                         {
                             self.screen = Screen::RestoreManage {
-                                filter: *filter,
                                 backups: backups.clone(),
                             };
                             self.reset_list(3);
@@ -947,16 +977,12 @@ impl App {
     }
 
     fn handle_name_key(&mut self, key: KeyEvent) {
-        let Screen::BackupName {
-            editors,
-            include_state,
-        } = self.screen.clone()
-        else {
+        let Screen::BackupName { include_state } = self.screen.clone() else {
             return;
         };
         match key.code {
             KeyCode::Esc => {
-                self.screen = Screen::BackupMode { editors };
+                self.screen = Screen::BackupMode;
                 self.reset_list(3);
             }
             KeyCode::Enter => {
@@ -969,32 +995,7 @@ impl App {
                 } else {
                     Some(raw.to_string())
                 };
-                let mut any = false;
-                for editor in &editors {
-                    if !self.ensure_editor(*editor) {
-                        continue;
-                    }
-                    match backup::create_backup(*editor, include_state, custom.as_deref()) {
-                        Ok(info) => {
-                            any = true;
-                            self.status = StatusMsg::Ok(format!(
-                                "{} — {} ({})",
-                                t(Msg::BackupDone),
-                                info.name,
-                                fmt_size(info.bytes)
-                            ));
-                        }
-                        Err(e) => {
-                            self.status =
-                                StatusMsg::Warn(format!("{}: {e}", t(Msg::BackupFail)));
-                        }
-                    }
-                }
-                if any {
-                    self.did_work = true;
-                }
-                self.screen = Screen::MainMenu;
-                self.reset_list(4);
+                self.run_backup(include_state, custom);
             }
             KeyCode::Backspace => {
                 self.name_input.handle(InputRequest::DeletePrevChar);
@@ -1021,20 +1022,11 @@ impl App {
                 self.should_quit = true;
                 return;
             }
-            Screen::PickApp { .. } => Screen::MainMenu,
-            Screen::Scanning { .. } => {
-                self.pending_editors.clear();
-                Screen::PickApp {
-                    use_back: false,
-                    for_backup: false,
-                }
-            }
-            Screen::ScanAndPlan { .. } => {
-                self.pending_editors.clear();
-                Screen::PickApp {
-                    use_back: false,
-                    for_backup: false,
-                }
+            // Don't abort mid force-quit or mid-clean (partial deletes).
+            Screen::ForceQuitting { .. } => return,
+            Screen::Progress { summary_done, .. } if !summary_done => return,
+            Screen::Scanning { .. } | Screen::ScanAndPlan { .. } | Screen::BackupMode => {
+                Screen::MainMenu
             }
             Screen::CustomClean {
                 editor,
@@ -1043,15 +1035,11 @@ impl App {
                 stats,
                 ..
             } => Self::scan_screen(editor, root, total, stats),
-            Screen::BackupMode { .. } => Screen::PickApp {
-                use_back: true,
-                for_backup: true,
-            },
             Screen::BackupName { .. } => return,
-            Screen::RestoreFilter => Screen::MainMenu,
-            Screen::RestoreManage { .. } => Screen::RestoreFilter,
-            Screen::RestorePick { filter, backups } => Screen::RestoreManage { filter, backups },
-            Screen::DeleteMulti { filter, backups } => Screen::RestoreManage { filter, backups },
+            Screen::RestoreManage { .. } => Screen::MainMenu,
+            Screen::RestorePick { backups } | Screen::DeleteMulti { backups } => {
+                Screen::RestoreManage { backups }
+            }
             Screen::Confirm { return_to, .. } => *return_to.clone(),
             _ => Screen::MainMenu,
         };
@@ -1193,6 +1181,10 @@ impl App {
                 self.list_hit_area = Rect::default();
                 draw_progress(f, chunks[1], log, *step, selected.len(), frame);
             }
+            Screen::ForceQuitting { .. } => {
+                self.list_hit_area = Rect::default();
+                draw_confirm(f, chunks[1], t(Msg::ForceQuitting), frame);
+            }
             Screen::Confirm { prompt, .. } => {
                 let confirm_area = Rect {
                     height: chunks[1].height.saturating_sub(6),
@@ -1220,9 +1212,7 @@ impl App {
                 let title = match &self.screen {
                     Screen::Language => t(Msg::PickLang),
                     Screen::MainMenu => t(Msg::MainMenu),
-                    Screen::PickApp { .. } => t(Msg::PickApp),
-                    Screen::BackupMode { .. } => t(Msg::BackupMode),
-                    Screen::RestoreFilter => t(Msg::PickApp),
+                    Screen::BackupMode => t(Msg::BackupMode),
                     Screen::RestoreManage { .. } => t(Msg::BackupManage),
                     Screen::RestorePick { .. } => t(Msg::PickBackup),
                     _ => "",

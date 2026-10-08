@@ -264,23 +264,22 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
                         .file_name()
                         .map(|s| s.to_string_lossy().to_string())
                         .unwrap_or_default();
-                    // cursor-backup-xxx or vscode-backup-xxx
-                    let app = if folder.starts_with("cursor-") {
-                        "cursor".into()
-                    } else if folder.starts_with("vscode-") {
-                        "vscode".into()
-                    } else {
+                    // cursor-backup-xxx (legacy vscode-* folders are ignored)
+                    if !folder.starts_with("cursor-") {
                         continue;
-                    };
+                    }
                     let tag = folder
                         .strip_prefix("cursor-backup-")
-                        .or_else(|| folder.strip_prefix("vscode-backup-"))
                         .unwrap_or(&folder)
                         .to_string();
-                    (app, folder.clone(), tag, path.join("state.vscdb").exists())
+                    ("cursor".into(), folder.clone(), tag, path.join("state.vscdb").exists())
                 }
             };
 
+            // Cursor-only tool — skip any non-cursor backups (e.g. old vscode-*).
+            if app != "cursor" {
+                continue;
+            }
             if let Some(ref f) = filter {
                 if &app != f {
                     continue;
@@ -352,16 +351,13 @@ fn path_under_backups_root(path: &Path, root: &Path) -> io::Result<bool> {
 }
 
 pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
-    let editor = match info.app.as_str() {
-        "cursor" => Editor::Cursor,
-        "vscode" => Editor::VsCode,
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "unknown app in backup",
-            ))
-        }
-    };
+    if info.app != "cursor" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unknown app in backup",
+        ));
+    }
+    let editor = Editor::Cursor;
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;

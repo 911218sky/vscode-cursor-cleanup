@@ -70,13 +70,7 @@ tr! {
     LangTw => { tw: "繁體中文", cn: "繁体中文", en: "Traditional Chinese" },
     LangCn => { tw: "简体中文", cn: "简体中文", en: "Simplified Chinese" },
     LangEn => { tw: "English", cn: "English", en: "English" },
-    PickApp => { tw: "要選擇哪個應用？", cn: "要选择哪个应用？", en: "Which app?" },
-    AppCursor => { tw: "僅 Cursor", cn: "仅 Cursor", en: "Cursor only" },
-    AppVscode => { tw: "僅 VSCode", cn: "仅 VSCode", en: "VSCode only" },
-    AppBoth => { tw: "兩者都選", cn: "两者都选", en: "Both" },
-    AppAll => { tw: "全部", cn: "全部", en: "All" },
     Exit => { tw: "退出", cn: "退出", en: "Exit" },
-    BadApp => { tw: "未知 --app，請用 cursor|vscode|both", cn: "未知 --app，请用 cursor|vscode|both", en: "Unknown --app; use cursor|vscode|both" },
     TotalSize => { tw: "總占用", cn: "总占用", en: "Total" },
     Cleanable => { tw: "可清理", cn: "可清理", en: "Cleanable" },
     RiskSafe => { tw: "[安全]", cn: "[安全]", en: "[safe]" },
@@ -87,13 +81,14 @@ tr! {
     RiskHighWord => { tw: "高危", cn: "高危", en: "high" },
     PickPlan => { tw: "選擇清理方案", cn: "选择清理方案", en: "Choose a cleanup plan" },
     PlanCustom => { tw: "自訂 — 逐項確認", cn: "自定义 — 逐项确认", en: "Custom — confirm each item" },
-    PlanSkipApp => { tw: "跳過這個應用", cn: "跳过这个应用", en: "Skip this app" },
     Clean => { tw: "清理", cn: "清理", en: "Clean" },
     Skip => { tw: "跳過", cn: "跳过", en: "Skip" },
     NothingSelected => { tw: "未選擇清理項", cn: "未选择清理项", en: "Nothing selected" },
     AboutToClean => { tw: "即將清理：", cn: "即将清理：", en: "Will clean:" },
     ForceQuitOk => { tw: "已強制關閉", cn: "已强制关闭", en: "Force-quit done" },
     ForceQuitFail => { tw: "無法完全關閉，檔案可能仍被鎖定", cn: "无法完全关闭，文件可能仍被锁定", en: "Could not fully quit; files may stay locked" },
+    ForceQuitting => { tw: "正在強制關閉 Cursor…", cn: "正在强制关闭 Cursor…", en: "Force-quitting Cursor…" },
+    ConfirmForceQuit => { tw: "正在執行，確定要強制關閉？未儲存的變更可能遺失。", cn: "正在运行，确定要强制关闭？未保存的更改可能丢失。", en: "is running — force quit? Unsaved changes may be lost." },
     EditorRunningAbort => { tw: "應用仍在執行，已略過清理（請先關閉，或改用 TUI 強制關閉）", cn: "应用仍在运行，已跳过清理（请先关闭，或改用 TUI 强制关闭）", en: "App still running — skipped cleanup (close it first, or use TUI force-quit)" },
     Done => { tw: "完成", cn: "完成", en: "done" },
     Partial => { tw: "部分", cn: "部分", en: "partial" },
@@ -131,7 +126,7 @@ tr! {
     DeleteMultiHint => { tw: "空白鍵勾選要刪的項目後 Enter；直接 Enter／Esc＝返回（不用勾選「返回」）", cn: "空格键勾选要删的项目后 Enter；直接 Enter／Esc＝返回（不用勾选「返回」）", en: "Space-check items then Enter to delete; bare Enter / Esc = back" },
     DeleteDone => { tw: "已刪除備份", cn: "已删除备份", en: "Backup deleted" },
     DeleteFail => { tw: "刪除失敗", cn: "删除失败", en: "Delete failed" },
-    RestoreDone => { tw: "恢復完成 — 請重啟編輯器", cn: "恢复完成 — 请重启编辑器", en: "Restore done — please restart the editor" },
+    RestoreDone => { tw: "恢復完成 — 請重啟 Cursor", cn: "恢复完成 — 请重启 Cursor", en: "Restore done — please restart Cursor" },
     RestoreFail => { tw: "恢復失敗", cn: "恢复失败", en: "Restore failed" },
 }
 
@@ -229,68 +224,65 @@ pub fn fmt_summary(name: &str, before: &str, after: &str, freed: &str) -> String
 pub fn help_text() -> String {
     match lang() {
         Lang::ZhTw => "\
-cursor-cleanup  —  VSCode / Cursor 清理 / 備份工具
+cursor-cleanup  —  Cursor 清理 / 備份工具
 
 用法:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan --app cursor
-  cursor-cleanup.exe --lang en --app cursor
+  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --lang en
 
 選項:
-  -a, --app <cursor|vscode|both>  指定應用
   -l, --lang <zh-TW|zh-CN|en>     語言（預設 zh-TW）
-  -y, --yes                       非互動，只清安全項（需搭配 --app；應用執行中會略過）
+  -y, --yes                       非互動，只清安全項（Cursor 執行中會略過）
       --scan                      只掃描占用
       --no-pause                  結束不暫停
   -h, --help                      說明
   -V, --version                   版本
 
 無參數：TUI 互動（滑鼠 + 鍵盤）— 清理 / 備份 / 恢復／刪除備份
---scan / --yes：CLI 純文字輸出（需 --app）
+--scan / --yes：CLI 純文字輸出
 備份位置：與程式同目錄的 backups\\\\
 "
         .into(),
         Lang::ZhCn => "\
-cursor-cleanup  —  VSCode / Cursor 清理 / 备份工具
+cursor-cleanup  —  Cursor 清理 / 备份工具
 
 用法:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan --app cursor
-  cursor-cleanup.exe --lang en --app cursor
+  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --lang en
 
 选项:
-  -a, --app <cursor|vscode|both>  指定应用
   -l, --lang <zh-TW|zh-CN|en>     语言（默认 zh-TW）
-  -y, --yes                       非互动，只清安全项（需搭配 --app；应用运行中会跳过）
+  -y, --yes                       非互动，只清安全项（Cursor 运行中会跳过）
       --scan                      只扫描占用
       --no-pause                  结束不暂停
   -h, --help                      帮助
   -V, --version                   版本
 
 无参数：TUI 互动（鼠标 + 键盘）— 清理 / 备份 / 恢复／删除备份
---scan / --yes：CLI 纯文字输出（需 --app）
+--scan / --yes：CLI 纯文字输出
 备份位置：与程序同目录的 backups\\\\
 "
         .into(),
         Lang::En => "\
-cursor-cleanup  —  VSCode / Cursor clean / backup tool
+cursor-cleanup  —  Cursor clean / backup tool
 
 Usage:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan --app cursor
-  cursor-cleanup.exe --lang zh-TW --app cursor
+  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --lang zh-TW
 
 Options:
-  -a, --app <cursor|vscode|both>  Target app
   -l, --lang <zh-TW|zh-CN|en>     Language (default zh-TW)
-  -y, --yes                       Non-interactive, safe items only (requires --app; skips if app running)
+  -y, --yes                       Non-interactive, safe items only (skips if Cursor running)
       --scan                      Scan sizes only
       --no-pause                  Do not pause on exit
   -h, --help                      Help
   -V, --version                   Version
 
 No args: TUI (mouse + keyboard) — Clean / Backup / Restore-or-delete
---scan / --yes: CLI stdout mode (requires --app)
+--scan / --yes: CLI stdout mode
 Backups: backups\\\\ next to the executable
 "
         .into(),

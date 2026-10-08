@@ -3,12 +3,12 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.3.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
 
-Cleans VSCode / Cursor caches and bloated `state.vscdb`
+Cleans Cursor caches and bloated `state.vscdb`
 
 [繁體中文](./README.md) · [简体中文](./README.zh-CN.md) · [Docs](./docs/guide.md)
 
@@ -23,7 +23,7 @@ Repo: https://github.com/911218sky/vscode-cursor-cleanup
 
 Upstream [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) is a **macOS Bash** interactive cleaner for VSCode/Cursor caches and `state.vscdb`, with ZIP backups during cleanup.
 
-This fork keeps that mission and adds:
+This project is **Cursor-only** and adds:
 
 | | Upstream ThendCN | This project |
 |--|------------------|--------------|
@@ -59,16 +59,15 @@ This fork keeps that mission and adds:
 
 ```powershell
 cursor-cleanup.exe --lang en
-cursor-cleanup.exe --lang en --scan --app cursor
-cursor-cleanup.exe --app cursor --yes
+cursor-cleanup.exe --lang en --scan
+cursor-cleanup.exe --yes
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `--lang zh-TW\|zh-CN\|en` | UI language (default `zh-TW`) |
-| `--app cursor\|vscode\|both` | Target app |
 | `--scan` | Scan only |
-| `--yes` | Auto-clean safe items (requires `--app`; skips if app running) |
+| `--yes` | Auto-clean safe items (skips if Cursor is running) |
 | `--no-pause` | No pause on exit |
 
 ## What it cleans
