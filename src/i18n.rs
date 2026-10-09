@@ -109,7 +109,6 @@ tr! {
     BackupNameAsk => { tw: "備份名稱（資料夾名）", cn: "备份名称（文件夹名）", en: "Backup name (folder)" },
     BackupNameHint => { tw: "可自訂名稱；直接 Enter＝預設時間戳（如 cursor-backup-2026-10-07-…）", cn: "可自定义名称；直接 Enter＝默认时间戳（如 cursor-backup-2026-10-07-…）", en: "Custom name OK; Enter alone = default timestamp (e.g. cursor-backup-2026-10-07-…)" },
     BackupNameInvalid => { tw: "名稱無效，將改用預設時間戳", cn: "名称无效，将改用默认时间戳", en: "Invalid name — using default timestamp instead" },
-    PreRestoreBackup => { tw: "恢復前已自動備份目前設定", cn: "恢复前已自动备份目前配置", en: "Auto-backed up current config before restore" },
     ConfirmDelete => { tw: "確定刪除所選備份？", cn: "确定删除所选备份？", en: "Delete selected backups?" },
     ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
     ConfirmRestoreRunning => { tw: "Cursor 正在執行 — 恢復前必須先關閉（下一步會詢問是否強制關閉）。", cn: "Cursor 正在运行 — 恢复前必须先关闭（下一步会询问是否强制关闭）。", en: "Cursor is running — must close before restore (you will be asked to force quit next)." },

@@ -384,13 +384,7 @@ fn verify_restored(src: &Path, dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RestoreOutcome {
-    /// True when a pre-restore snapshot of the live config was created.
-    pub did_pre_backup: bool,
-}
-
-pub fn restore_backup(info: &BackupInfo) -> io::Result<RestoreOutcome> {
+pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
     if info.app != "cursor" {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -413,14 +407,6 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<RestoreOutcome> {
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;
-
-    // Snapshot before overwriting live config (requires Cursor to be closed).
-    let did_pre_backup = if root.exists() {
-        create_backup(editor, true, Some("pre-restore"))?;
-        true
-    } else {
-        false
-    };
 
     // Ensure User dirs exist
     fs::create_dir_all(root.join("User"))?;
@@ -467,7 +453,7 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<RestoreOutcome> {
         clear_state_sidecars(&global)?;
     }
 
-    Ok(RestoreOutcome { did_pre_backup })
+    Ok(())
 }
 
 /// Delete one backup folder. Refuses paths outside `{exe_dir}/backups/`.

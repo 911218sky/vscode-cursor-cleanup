@@ -606,17 +606,13 @@ impl App {
             return;
         }
         match backup::restore_backup(&info) {
-            Ok(outcome) => {
+            Ok(()) => {
                 self.did_work = true;
-                let mut msg = format!(
+                self.status = StatusMsg::Ok(format!(
                     "{} — {}",
                     t(Msg::RestoreDone),
                     t(Msg::RestoreVerified)
-                );
-                if outcome.did_pre_backup {
-                    msg = format!("{msg} — {}", t(Msg::PreRestoreBackup));
-                }
-                self.status = StatusMsg::Ok(msg);
+                ));
                 self.maybe_relaunch();
                 self.screen = Screen::MainMenu;
                 self.reset_list(4);
