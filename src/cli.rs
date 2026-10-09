@@ -1,7 +1,7 @@
 //! Plain stdout output for `--scan` / `--yes` CLI mode (non-TUI).
 
-use crate::cleanup::{collect_stats, is_editor_running, run_target, TargetStat};
-use crate::fsutil::{fmt_size, path_size};
+use crate::cleanup::{collect_stats, is_editor_running, run_target, sum_target_sizes, TargetStat};
+use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Msg};
 use crate::paths::{Editor, Risk};
 use std::io::{self, Write};
@@ -236,7 +236,7 @@ pub fn run_yes_clean(editor: Editor) -> bool {
         }
     }
 
-    let after = path_size(&root);
+    let after = sum_target_sizes(&root, &stats);
     println!();
     println!(
         "  {}",

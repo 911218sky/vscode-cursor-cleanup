@@ -91,9 +91,13 @@ pub fn remove_best_effort(path: &Path) -> (u64, usize) {
             errors += e;
         }
     }
-    if fs::remove_dir_all(path).is_err() {
+    // Children already removed — prefer remove_dir (no second tree walk).
+    // Fall back to remove_dir_all only if the directory is still non-empty.
+    if fs::remove_dir(path).is_err() {
         if path.exists() {
-            errors += 1;
+            if fs::remove_dir_all(path).is_err() && path.exists() {
+                errors += 1;
+            }
         }
     }
     (freed, errors)

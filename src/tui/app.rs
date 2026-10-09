@@ -1,9 +1,9 @@
 use crate::backup::{self, sanitize_backup_name, BackupInfo};
 use crate::cleanup::{
     collect_stats, force_quit_editor, is_editor_running, launch_editor, run_target,
-    wait_until_data_unlocked, TargetStat,
+    sum_target_sizes, wait_until_data_unlocked, TargetStat,
 };
-use crate::fsutil::{fmt_size, path_size};
+use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
 use crate::paths::{plan_target_indices, Editor, Risk};
 use crate::tui::widgets::{
@@ -172,11 +172,6 @@ impl App {
         self.tick_progress();
     }
 
-    /// Input screens should not idle-redraw — avoids flicker while typing.
-    pub fn idle_redraw(&self) -> bool {
-        !matches!(self.screen, Screen::BackupName { .. })
-    }
-
     pub fn wants_animation(&self) -> bool {
         matches!(
             self.screen,
@@ -187,17 +182,27 @@ impl App {
     }
 
     fn tick_force_quitting(&mut self) {
-        let Screen::ForceQuitting {
-            editor,
-            then,
-            return_to,
-        } = self.screen.clone()
-        else {
-            return;
+        let editor = match &self.screen {
+            Screen::ForceQuitting { editor, .. } => *editor,
+            _ => return,
         };
         if self.do_force_quit(editor) {
+            let then = match std::mem::replace(&mut self.screen, Screen::MainMenu) {
+                Screen::ForceQuitting { then, .. } => then,
+                other => {
+                    self.screen = other;
+                    return;
+                }
+            };
             self.continue_pending(*then);
         } else {
+            let return_to = match std::mem::replace(&mut self.screen, Screen::MainMenu) {
+                Screen::ForceQuitting { return_to, .. } => return_to,
+                other => {
+                    self.screen = other;
+                    return;
+                }
+            };
             self.screen = *return_to;
             let len = self.current_labels().len().max(1);
             self.reset_list(len);
@@ -205,8 +210,9 @@ impl App {
     }
 
     fn tick_scanning(&mut self) {
-        let Screen::Scanning { editor } = self.screen.clone() else {
-            return;
+        let editor = match &self.screen {
+            Screen::Scanning { editor } => *editor,
+            _ => return,
         };
         if self.frame < self.scan_at {
             return;
@@ -229,30 +235,44 @@ impl App {
     }
 
     fn tick_progress(&mut self) {
-        let Screen::Progress {
-            editor,
-            root,
-            total,
-            stats,
-            selected,
-            step,
-            freed_total,
-            log,
-            any_errors,
-            summary_done,
-            finish_at,
-            ..
-        } = self.screen.clone()
-        else {
-            return;
+        let (summary_done, step, selected_len, finish_at, any_errors) = match &self.screen {
+            Screen::Progress {
+                summary_done,
+                step,
+                finish_at,
+                any_errors,
+                selected,
+                ..
+            } => (
+                *summary_done,
+                *step,
+                selected.len(),
+                *finish_at,
+                *any_errors,
+            ),
+            _ => return,
         };
 
         if !summary_done {
-            if step < selected.len() {
-                let idx = selected[step];
-                let target = &stats[idx].target;
-                let title = i18n::target_title(target.kind);
-                let result = run_target(&root, target);
+            if step < selected_len {
+                let (root, target, title, freed_total, any_errors) = {
+                    let Screen::Progress {
+                        root,
+                        stats,
+                        selected,
+                        freed_total,
+                        any_errors,
+                        ..
+                    } = &self.screen
+                    else {
+                        return;
+                    };
+                    let idx = selected[step];
+                    let target = stats[idx].target.clone();
+                    let title = i18n::target_title(target.kind);
+                    (root.clone(), target, title, *freed_total, *any_errors)
+                };
+                let result = run_target(&root, &target);
                 let new_freed = freed_total + result.freed;
                 let step_err = result.errors > 0;
                 let line = if !step_err {
@@ -265,30 +285,42 @@ impl App {
                 } else {
                     i18n::fmt_partial(&fmt_size(result.freed), result.errors)
                 };
-                let mut new_log = log;
-                new_log.push(line);
-                self.screen = Screen::Progress {
-                    editor,
-                    root,
-                    total,
-                    stats,
-                    selected,
-                    step: step + 1,
-                    freed_total: new_freed,
-                    log: new_log,
-                    any_errors: any_errors || step_err,
-                    summary_done: false,
-                    finish_at: 0,
-                };
+                if let Screen::Progress {
+                    step,
+                    freed_total,
+                    log,
+                    any_errors: errs,
+                    ..
+                } = &mut self.screen
+                {
+                    *step += 1;
+                    *freed_total = new_freed;
+                    log.push(line);
+                    *errs = any_errors || step_err;
+                }
             } else {
-                let after = path_size(&root);
-                let mut new_log = log;
-                new_log.push(i18n::fmt_summary(
+                let (editor, total, freed_total, any_errors, after) = {
+                    let Screen::Progress {
+                        editor,
+                        root,
+                        total,
+                        stats,
+                        freed_total,
+                        any_errors,
+                        ..
+                    } = &self.screen
+                    else {
+                        return;
+                    };
+                    let after = sum_target_sizes(root, stats);
+                    (*editor, *total, *freed_total, *any_errors, after)
+                };
+                let summary = i18n::fmt_summary(
                     editor.display_name(),
                     &fmt_size(total),
                     &fmt_size(after),
                     &fmt_size(freed_total),
-                ));
+                );
                 self.did_work = true;
                 if any_errors {
                     self.relaunch_after = false;
@@ -296,19 +328,18 @@ impl App {
                 } else {
                     self.status = StatusMsg::Ok(t(Msg::AllDone).to_string());
                 }
-                self.screen = Screen::Progress {
-                    editor,
-                    root,
-                    total,
-                    stats,
-                    selected,
-                    step,
-                    freed_total,
-                    log: new_log,
-                    any_errors,
-                    summary_done: true,
-                    finish_at: self.frame + 15,
-                };
+                let finish_at = self.frame + 15;
+                if let Screen::Progress {
+                    log,
+                    summary_done,
+                    finish_at: fa,
+                    ..
+                } = &mut self.screen
+                {
+                    log.push(summary);
+                    *summary_done = true;
+                    *fa = finish_at;
+                }
             }
             return;
         }
@@ -1219,7 +1250,7 @@ impl App {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),
+                Constraint::Length(3),
                 Constraint::Min(10),
                 Constraint::Length(3),
             ])
@@ -1240,27 +1271,30 @@ impl App {
                 stats,
                 ..
             } => {
-                let cols = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+                // Vertical stack: Cursor table + plan list, with one row gap between them.
+                let labels = self.current_labels();
+                let plan_h = (labels.len() as u16).saturating_add(2).clamp(7, 12);
+                let rows = Layout::default()
+                    .direction(Direction::Vertical)
+                    .spacing(1)
+                    .constraints([Constraint::Min(6), Constraint::Length(plan_h)])
                     .split(chunks[1]);
                 draw_scan_table(
                     f,
-                    cols[0],
+                    rows[0],
                     *editor,
                     &root.display().to_string(),
                     *total,
                     stats,
                     frame,
                 );
-                let labels = self.current_labels();
                 let sel = self.list_selected();
                 let icons: Vec<&str> = icons_for_screen(MenuScreen::Plan, labels.len());
-                let items = list_items(&labels, sel, &icons, frame);
-                self.list_hit_area = cols[1];
+                let items = list_items(&labels, sel, &icons, frame, rows[1].width);
+                self.list_hit_area = rows[1];
                 f.render_stateful_widget(
                     menu_list(items, sel, t(Msg::PickPlan), frame),
-                    cols[1],
+                    rows[1],
                     &mut self.list_state,
                 );
             }
@@ -1283,7 +1317,7 @@ impl App {
                 let sel = self.list_selected();
                 let icons: Vec<&str> =
                     icons_for_screen(MenuScreen::CustomClean, labels.len());
-                let items = list_items(&labels, sel, &icons, frame);
+                let items = list_items(&labels, sel, &icons, frame, chunks[1].width);
                 self.list_hit_area = chunks[1];
                 f.render_stateful_widget(
                     menu_list(items, sel, &prompt, frame),
@@ -1315,13 +1349,14 @@ impl App {
             Screen::DeleteMulti { .. } => {
                 let labels = self.current_labels();
                 let sel = self.list_selected();
-                let items = checkbox_items(&labels, &self.checkbox, sel, frame);
                 let hint = Paragraph::new(t(Msg::DeleteMultiHint))
                     .style(Style::default().fg(Color::DarkGray));
                 let sub = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Length(2), Constraint::Min(5)])
                     .split(chunks[1]);
+                let items =
+                    checkbox_items(&labels, &self.checkbox, sel, frame, sub[1].width);
                 f.render_widget(hint, sub[0]);
                 self.list_hit_area = sub[1];
                 f.render_stateful_widget(
@@ -1352,12 +1387,12 @@ impl App {
                 let labels = self.current_labels();
                 let sel = self.list_selected();
                 let icons: Vec<&str> = icons_for_screen(MenuScreen::Confirm, labels.len());
-                let items = list_items(&labels, sel, &icons, frame);
                 let list_area = Rect {
                     y: chunks[1].y + chunks[1].height.saturating_sub(5),
                     height: 5,
                     ..chunks[1]
                 };
+                let items = list_items(&labels, sel, &icons, frame, list_area.width);
                 self.list_hit_area = list_area;
                 f.render_stateful_widget(
                     menu_list(items, sel, "", frame),
@@ -1378,7 +1413,7 @@ impl App {
                 let sel = self.list_selected();
                 let menu = self.menu_screen();
                 let icons: Vec<&str> = icons_for_screen(menu, labels.len());
-                let items = list_items(&labels, sel, &icons, frame);
+                let items = list_items(&labels, sel, &icons, frame, chunks[1].width);
                 self.list_hit_area = chunks[1];
                 f.render_stateful_widget(
                     menu_list(items, sel, title, frame),

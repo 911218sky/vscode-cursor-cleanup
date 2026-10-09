@@ -126,7 +126,15 @@ pub fn wait_until_data_unlocked(editor: Editor, quiet: bool) -> bool {
             let _ = io::stdout().flush();
         }
         if i + 1 < 40 {
-            std::thread::sleep(Duration::from_millis(500));
+            // Back off after the first few probes to cut process/disk churn.
+            let ms = if i < 4 {
+                500
+            } else if i < 12 {
+                750
+            } else {
+                1000
+            };
+            std::thread::sleep(Duration::from_millis(ms));
         }
     }
     probes.iter().all(|p| probe_path_unlocked(p))
@@ -157,10 +165,17 @@ pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
             }
         }
 
-        // Poll until process list no longer shows the editor (up to ~10s)
+        // Poll until process list no longer shows the editor (up to ~10–15s)
         let mut gone = false;
         for i in 0..20 {
-            std::thread::sleep(Duration::from_millis(500));
+            let ms = if i < 4 {
+                500
+            } else if i < 10 {
+                750
+            } else {
+                1000
+            };
+            std::thread::sleep(Duration::from_millis(ms));
             if !quiet {
                 let _ = io::stdout().write_all(b".");
                 let _ = io::stdout().flush();
@@ -169,7 +184,7 @@ pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
                 gone = true;
                 break;
             }
-            // Re-issue kill every ~2s in case child processes respawned briefly
+            // Re-issue kill every few probes in case child processes respawned briefly
             if i > 0 && i % 4 == 0 {
                 #[cfg(windows)]
                 kill_windows_images(windows_images(editor));
@@ -381,6 +396,20 @@ pub fn collect_stats(editor: Editor) -> Option<(PathBuf, u64, Vec<TargetStat>)> 
     Some((root, total, stats))
 }
 
+/// Re-measure known cleanup targets only (not the whole data root).
+pub fn sum_target_sizes(root: &std::path::Path, stats: &[TargetStat]) -> u64 {
+    stats
+        .iter()
+        .map(|s| {
+            s.target
+                .rel_paths
+                .iter()
+                .map(|rel| path_size(&root.join(rel)))
+                .sum::<u64>()
+        })
+        .sum()
+}
+
 pub struct CleanResult {
     pub freed: u64,
     pub errors: usize,
@@ -418,12 +447,18 @@ pub fn run_target(root: &std::path::Path, target: &CleanTarget) -> CleanResult {
         freed += f;
         errors += e;
     }
-    let mut remaining = 0u64;
-    for rel in target.rel_paths {
-        if let Some(path) = join_under_root(root, rel) {
-            remaining += path_size(&path);
+    // Skip a second walk when every delete reported success (paths are gone).
+    let remaining = if errors == 0 {
+        0
+    } else {
+        let mut remaining = 0u64;
+        for rel in target.rel_paths {
+            if let Some(path) = join_under_root(root, rel) {
+                remaining += path_size(&path);
+            }
         }
-    }
+        remaining
+    };
     if remaining > 0 {
         // Treat leftover data as a failure so the UI does not show pure success.
         errors = errors.saturating_add(1);

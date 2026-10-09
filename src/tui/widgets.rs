@@ -1,60 +1,103 @@
 use crate::cleanup::TargetStat;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Msg};
-use crate::paths::{Editor, Risk};
+use crate::paths::Editor;
 use crate::tui::theme;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Row, Table, Wrap};
 use ratatui::Frame;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const HIGHLIGHT_COLS: usize = 2; // "▌ "
+
+/// Truncate `s` to at most `max` display columns, appending `…` when cut.
+pub fn truncate_to_width(s: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    if s.width() <= max {
+        return s.to_string();
+    }
+    if max == 1 {
+        return "…".to_string();
+    }
+    let keep = max - 1;
+    let mut out = String::new();
+    let mut w = 0;
+    for ch in s.chars() {
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if w + cw > keep {
+            break;
+        }
+        out.push(ch);
+        w += cw;
+    }
+    out.push('…');
+    out
+}
+
+fn label_cols(area_width: u16, icon: &str) -> usize {
+    let chrome = 2usize // left/right borders
+        + HIGHLIGHT_COLS
+        + icon.width().saturating_add(1); // icon + space
+    (area_width as usize).saturating_sub(chrome)
+}
+
+fn panel(title: impl Into<String>, frame: u64) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(theme::border_style(frame))
+        .title(Span::styled(title.into(), theme::accent_style(frame, 0)))
+}
+
+fn menu_block(title: &str, frame: u64, selected: usize) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .border_style(theme::border_style(frame))
+        .title(Span::styled(
+            format!(" {title} "),
+            theme::accent_style(frame, selected + 1),
+        ))
+}
 
 pub fn draw_banner(f: &mut Frame, area: Rect, _subtitle: &str, frame: u64, animate: bool) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Plain)
         .border_style(theme::border_style(frame))
         .title(Span::styled(
             format!(" cursor-cleanup · v{VERSION} "),
             theme::accent_style(frame, 0),
         ))
-        .title_alignment(Alignment::Center);
+        .title_alignment(Alignment::Left);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let title_line = theme::title_line("Cursor");
     let marker = if animate {
         theme::spinner(frame)
     } else {
-        "◈"
+        "·"
     };
     let hint = Line::from(vec![
-        Span::styled(
-            format!("{marker} "),
-            theme::accent_style(frame, 0),
-        ),
+        Span::styled(format!("{marker} "), theme::accent_style(frame, 0)),
         Span::styled(
             t(Msg::BannerHint).to_string(),
             Style::default().fg(Color::DarkGray),
         ),
     ]);
 
-    let p = Paragraph::new(vec![title_line, hint]).alignment(Alignment::Center);
+    let p = Paragraph::new(hint).alignment(Alignment::Left);
     f.render_widget(p, inner);
 }
 
 pub fn draw_scanning(f: &mut Frame, area: Rect, editor: Editor, frame: u64) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme::border_style(frame))
-        .title(Span::styled(
-            " ◈ Scanning ",
-            theme::accent_style(frame, 1),
-        ));
+    let block = panel(" · Scanning ", frame);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -93,23 +136,9 @@ pub fn menu_list<'a>(
     frame: u64,
 ) -> List<'a> {
     List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title(Span::styled(
-                    format!(" {title} "),
-                    theme::accent_style(frame, selected + 1),
-                ))
-                .border_style(theme::border_style(frame)),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(theme::select_bg())
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("▶ ")
+        .block(menu_block(title, frame, selected))
+        .highlight_style(theme::select_style())
+        .highlight_symbol("▌ ")
 }
 
 pub fn list_items(
@@ -117,6 +146,7 @@ pub fn list_items(
     selected: usize,
     icons: &[&str],
     frame: u64,
+    area_width: u16,
 ) -> Vec<ListItem<'static>> {
     labels
         .iter()
@@ -135,9 +165,10 @@ pub fn list_items(
             } else {
                 Style::default().fg(Color::DarkGray)
             };
+            let text = truncate_to_width(s, label_cols(area_width, icon));
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{icon} "), icon_style),
-                Span::styled(s.clone(), style),
+                Span::styled(text, style),
             ]))
         })
         .collect()
@@ -148,15 +179,16 @@ pub fn checkbox_items(
     checked: &[bool],
     selected: usize,
     frame: u64,
+    area_width: u16,
 ) -> Vec<ListItem<'static>> {
     labels
         .iter()
         .enumerate()
         .map(|(i, s)| {
             let mark = if i < checked.len() && checked[i] {
-                "☑"
+                "[x]"
             } else {
-                "☐"
+                "[ ]"
             };
             let style = if i == selected {
                 Style::default()
@@ -170,9 +202,10 @@ pub fn checkbox_items(
             } else {
                 Color::DarkGray
             };
+            let text = truncate_to_width(s, label_cols(area_width, mark));
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{mark} "), Style::default().fg(mark_color)),
-                Span::styled(s.clone(), style),
+                Span::styled(text, style),
             ]))
         })
         .collect()
@@ -192,7 +225,7 @@ pub fn draw_scan_table(
     let header = Row::new(vec!["#", "Item", "Size", "Bar", "Risk"])
         .style(
             Style::default()
-                .fg(theme::accent(frame, 0))
+                .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )
         .bottom_margin(1);
@@ -202,21 +235,11 @@ pub fn draw_scan_table(
         .enumerate()
         .map(|(i, s)| {
             let risk = i18n::risk_tag(s.target.risk);
-            let color = match s.target.risk {
-                Risk::Safe => Color::Green,
-                Risk::Medium => Color::Yellow,
-                Risk::High => Color::Red,
-            };
-            let bar_w = 8usize;
+            let color = theme::risk_color(s.target.risk);
+            let bar_w = 10usize;
             let fill = ((s.bytes as f64 / max_bytes as f64) * bar_w as f64).round() as usize;
             let bar: String = (0..bar_w)
-                .map(|j| {
-                    if j < fill {
-                        '█'
-                    } else {
-                        '░'
-                    }
-                })
+                .map(|j| if j < fill { '━' } else { '─' })
                 .collect();
 
             Row::new(vec![
@@ -231,49 +254,51 @@ pub fn draw_scan_table(
         .collect();
 
     let cleanable: u64 = stats.iter().map(|s| s.bytes).sum();
+    // Single bottom title: cleanable + path — avoid overlaying two widgets on the border.
+    let clean_txt = fmt_size(cleanable);
+    let prefix = format!(" · {} {}  ·  ", t(Msg::Cleanable), clean_txt);
+    let path_cols = (area.width as usize).saturating_sub(prefix.width().saturating_add(2));
+    let path = truncate_to_width(root, path_cols.max(4));
+    let bottom = Line::from(vec![
+        Span::styled(" · ", theme::accent_style(frame, 2)),
+        Span::styled(
+            t(Msg::Cleanable).to_string(),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw(" "),
+        Span::styled(clean_txt, theme::accent_style(frame, 0)),
+        Span::styled("  ·  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(path, theme::data_style()),
+        Span::raw(" "),
+    ]);
     let table = Table::new(
         rows,
         [
             Constraint::Length(3),
             Constraint::Min(16),
-            Constraint::Length(9),
-            Constraint::Length(8),
+            Constraint::Length(10),
+            Constraint::Length(10),
             Constraint::Length(8),
         ],
     )
     .header(header)
+    .column_spacing(2)
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .border_type(BorderType::Plain)
             .border_style(theme::border_style(frame))
             .title(Span::styled(
-                format!(" {} — {} ", editor.display_name(), fmt_size(total)),
-                theme::accent_style(frame, 1),
+                format!(" {} — ", editor.display_name()),
+                Style::default().fg(Color::Gray),
             ))
-            .title_bottom(format!(" {root} ")),
+            .title(Span::styled(
+                format!("{} ", fmt_size(total)),
+                theme::data_style().add_modifier(Modifier::BOLD),
+            ))
+            .title_bottom(bottom),
     );
     f.render_widget(table, area);
-
-    if area.height > 2 {
-        let hint_area = Rect {
-            y: area.y + area.height.saturating_sub(1),
-            height: 1,
-            ..area
-        };
-        let hint = Paragraph::new(Line::from(vec![
-            Span::styled("◆ ", theme::accent_style(frame, 2)),
-            Span::styled(t(Msg::Cleanable), Style::default().fg(Color::DarkGray)),
-            Span::raw(" "),
-            Span::styled(
-                fmt_size(cleanable),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]));
-        f.render_widget(hint, hint_area);
-    }
 }
 
 pub fn draw_progress(
@@ -292,7 +317,7 @@ pub fn draw_progress(
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Plain)
         .border_style(theme::border_style(frame))
         .title(Span::styled(
             format!(
@@ -330,13 +355,11 @@ pub fn draw_progress(
 pub fn draw_confirm(f: &mut Frame, area: Rect, prompt: &str, _frame: u64) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Yellow))
+        .border_type(BorderType::Plain)
+        .border_style(theme::focus_border_style())
         .title(Span::styled(
             " Confirm ",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+            theme::accent_style(0, 0),
         ));
     let p = Paragraph::new(prompt.to_string())
         .wrap(Wrap { trim: true })
@@ -353,7 +376,7 @@ pub fn draw_input_field(
 ) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Plain)
         .border_style(theme::border_style(0))
         .title(Span::styled(
             format!(" {} ", t(Msg::BackupNameAsk)),
@@ -374,7 +397,7 @@ pub fn draw_input_field(
     let before = value.chars().take(cursor).collect::<String>();
     let after = value.chars().skip(cursor).collect::<String>();
     let line = Line::from(vec![
-        Span::styled("▸ ", theme::accent_style(0, 1)),
+        Span::styled("· ", theme::accent_style(0, 1)),
         Span::styled(before, Style::default().fg(Color::White)),
         Span::styled("▌", theme::accent_style(0, 2)),
         Span::styled(after, Style::default().fg(Color::White)),
@@ -383,17 +406,17 @@ pub fn draw_input_field(
     let p = Paragraph::new(line).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(theme::accent_style(0, 3)),
+            .border_type(BorderType::Plain)
+            .border_style(theme::focus_border_style()),
     );
     f.render_widget(p, input_area);
 }
 
 pub fn status_line(msg: &str, kind: StatusKind, frame: u64) -> Paragraph<'static> {
     let (icon, color) = match kind {
-        StatusKind::Ok => ("✔", Color::Green),
-        StatusKind::Warn => ("⚠", Color::Yellow),
-        StatusKind::Dim => ("◈", Color::DarkGray),
+        StatusKind::Ok => ("✔", theme::ok_color()),
+        StatusKind::Warn => ("!", theme::warn_color()),
+        StatusKind::Dim => ("·", Color::DarkGray),
     };
     let icon_style = if matches!(kind, StatusKind::Dim) {
         Style::default().fg(theme::accent(frame, 0))
@@ -403,16 +426,13 @@ pub fn status_line(msg: &str, kind: StatusKind, frame: u64) -> Paragraph<'static
 
     Paragraph::new(Line::from(vec![
         Span::styled(format!("{icon} "), icon_style),
-        Span::styled(
-            msg.to_string(),
-            Style::default().fg(color),
-        ),
+        Span::styled(msg.to_string(), Style::default().fg(color)),
     ]))
     .wrap(Wrap { trim: true })
     .block(
         Block::default()
             .borders(Borders::TOP)
-            .border_style(Style::default().fg(Color::Rgb(40, 40, 60))),
+            .border_style(theme::border_style(frame)),
     )
 }
 
@@ -423,7 +443,7 @@ pub enum StatusKind {
 }
 
 /// Map a mouse click inside a list widget area to an item index.
-/// Uses the same Block layout as `menu_list` (rounded border + title).
+/// Uses the same Block layout as `menu_list` (plain border + title).
 pub fn mouse_to_index(
     area: Rect,
     col: u16,
@@ -436,7 +456,7 @@ pub fn mouse_to_index(
     }
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(BorderType::Plain)
         .title(" ");
     let inner = block.inner(area);
     if col < inner.x
@@ -458,12 +478,12 @@ pub fn mouse_to_index(
 pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
     let defaults: &[&str] = match screen {
         MenuScreen::Language => &["繁", "简", "En"],
-        MenuScreen::MainMenu => &["✦", "◈", "↺", "⏻"],
-        MenuScreen::Plan => &["◉", "◆", "✦", "⚙", "←"],
-        MenuScreen::CustomClean => &["✔", "→", "←"],
-        MenuScreen::BackupMode => &["◈", "◉", "←"],
-        MenuScreen::RestoreManage => &["↺", "✕", "←"],
-        MenuScreen::Confirm => &["✔", "✕"],
+        MenuScreen::MainMenu => &["—", "·", "↺", "×"],
+        MenuScreen::Plan => &["·", "—", "═", "…", "←"],
+        MenuScreen::CustomClean => &["✓", "→", "←"],
+        MenuScreen::BackupMode => &["·", "—", "←"],
+        MenuScreen::RestoreManage => &["↺", "×", "←"],
+        MenuScreen::Confirm => &["✓", "×"],
         MenuScreen::Generic => &[],
     };
     (0..count)

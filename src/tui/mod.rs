@@ -24,25 +24,30 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut app = App::new(skip_lang);
 
-    let mut needs_draw = true;
-
     loop {
-        if needs_draw {
-            terminal.draw(|f| app.draw(f))?;
-            needs_draw = false;
-        }
+        terminal.draw(|f| app.draw(f))?;
 
         if app.should_quit {
             break;
         }
 
-        let timeout = if app.wants_animation() {
-            100
+        if app.wants_animation() {
+            // Spinner / progress screens: ~10 Hz tick + redraw.
+            if event::poll(Duration::from_millis(100))? {
+                match event::read()? {
+                    Event::Key(KeyEvent {
+                        code: KeyCode::Char('c'),
+                        modifiers,
+                        ..
+                    }) if modifiers.contains(KeyModifiers::CONTROL) => {
+                        app.should_quit = true;
+                    }
+                    ev => app.handle_event(ev),
+                }
+            }
+            app.tick();
         } else {
-            500
-        };
-
-        if event::poll(Duration::from_millis(timeout))? {
+            // Menus: block until input — no idle wake or redraw (CPU ~0).
             match event::read()? {
                 Event::Key(KeyEvent {
                     code: KeyCode::Char('c'),
@@ -53,14 +58,6 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
                 }
                 ev => app.handle_event(ev),
             }
-            // Mouse / key traffic must not starve ForceQuitting, Progress, Scanning.
-            if app.wants_animation() {
-                app.tick();
-            }
-            needs_draw = true;
-        } else if app.idle_redraw() {
-            app.tick();
-            needs_draw = true;
         }
     }
 
