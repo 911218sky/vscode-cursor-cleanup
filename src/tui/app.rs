@@ -3,6 +3,7 @@ use crate::cleanup::{
     collect_stats, force_quit_editor, is_editor_running, launch_editor, run_target,
     sum_target_sizes, wait_until_data_unlocked, TargetStat,
 };
+use crate::cursor_version;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
 use crate::paths::{plan_target_indices, Editor, Risk};
@@ -50,7 +51,11 @@ enum PendingWork {
 #[derive(Clone)]
 enum ConfirmAction {
     DeleteBackups(Vec<BackupInfo>),
-    Restore(BackupInfo),
+    Restore {
+        info: BackupInfo,
+        /// Current Cursor is older than the version stamped on this backup.
+        version_downgrade: bool,
+    },
     /// Extra confirm before cleaning High-risk targets (state.vscdb).
     Clean {
         editor: Editor,
@@ -526,8 +531,15 @@ impl App {
                 v.push(t(Msg::Back).to_string());
                 v
             }
-            Screen::Confirm { .. } => {
-                vec![t(Msg::ConfirmYes).to_string(), t(Msg::ConfirmNo).to_string()]
+            Screen::Confirm { action, .. } => {
+                let yes = match action {
+                    ConfirmAction::Restore {
+                        version_downgrade: true,
+                        ..
+                    } => t(Msg::ConfirmForceRestore),
+                    _ => t(Msg::ConfirmYes),
+                };
+                vec![yes.to_string(), t(Msg::ConfirmNo).to_string()]
             }
             _ => vec![],
         }
@@ -689,8 +701,13 @@ impl App {
         match backup::create_backup(editor, include_state, custom_name.as_deref()) {
             Ok(info) => {
                 self.did_work = true;
+                let ver = info
+                    .cursor_version
+                    .as_deref()
+                    .map(|v| format!(" · Cursor {v}"))
+                    .unwrap_or_default();
                 self.status = StatusMsg::Ok(format!(
-                    "{} — {} ({})",
+                    "{} — {} ({}){ver}",
                     t(Msg::BackupDone),
                     info.name,
                     fmt_size(info.bytes)
@@ -933,13 +950,31 @@ impl App {
                 }
                 let chosen = backups[idx].clone();
                 let return_to = self.screen.clone();
+                let current = cursor_version::detect_installed();
+                let version_downgrade = cursor_version::installed_older_than_backup(
+                    current.as_deref(),
+                    chosen.cursor_version.as_deref(),
+                );
                 let mut prompt = format!("{}\n{}", t(Msg::ConfirmRestore), chosen.label());
+                if version_downgrade {
+                    let backup_ver = chosen.cursor_version.as_deref().unwrap_or("?");
+                    prompt.push_str(&format!(
+                        "\n{}",
+                        i18n::fmt_restore_downgrade(
+                            current.as_deref().unwrap_or("?"),
+                            backup_ver
+                        )
+                    ));
+                }
                 if is_editor_running(Editor::Cursor) {
                     prompt.push_str(&format!("\n{}", t(Msg::ConfirmRestoreRunning)));
                 }
                 self.screen = Screen::Confirm {
                     prompt,
-                    action: ConfirmAction::Restore(chosen),
+                    action: ConfirmAction::Restore {
+                        info: chosen,
+                        version_downgrade,
+                    },
                     return_to: Box::new(return_to),
                 };
                 self.reset_list(2);
@@ -968,7 +1003,7 @@ impl App {
                     return;
                 }
                 match action {
-                    ConfirmAction::Restore(info) => {
+                    ConfirmAction::Restore { info, .. } => {
                         self.start_restore(info);
                     }
                     ConfirmAction::DeleteBackups(infos) => {

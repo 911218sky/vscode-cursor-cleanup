@@ -118,6 +118,7 @@ tr! {
     RestoreVerified => { tw: "已驗證檔案大小相符", cn: "已验证文件大小相符", en: "Verified file sizes match" },
     DeleteVerified => { tw: "已確認備份資料夾已刪除", cn: "已确认备份文件夹已删除", en: "Confirmed backup folder removed" },
     ConfirmYes => { tw: "確定", cn: "确定", en: "Confirm" },
+    ConfirmForceRestore => { tw: "強制恢復", cn: "强制恢复", en: "Force restore" },
     ConfirmNo => { tw: "取消", cn: "取消", en: "Cancel" },
     MouseHint => { tw: "滑鼠點選 / ↑↓ Enter", cn: "鼠标点选 / ↑↓ Enter", en: "Click / ↑↓ Enter" },
     BackupDone => { tw: "備份完成", cn: "备份完成", en: "Backup done" },
@@ -239,6 +240,20 @@ pub fn fmt_clean_residual(freed: &str, remaining: &str) -> String {
             t(Msg::Partial),
             freed,
             remaining
+        ),
+    }
+}
+
+pub fn fmt_restore_downgrade(current: &str, backup: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!(
+            "警告：目前 Cursor {current} 低於備份時的 {backup}。強制恢復可能造成設定／狀態不相容。"
+        ),
+        Lang::ZhCn => format!(
+            "警告：当前 Cursor {current} 低于备份时的 {backup}。强制恢复可能造成配置／状态不兼容。"
+        ),
+        Lang::En => format!(
+            "Warning: Cursor {current} is older than this backup ({backup}). Force restore may break settings / state."
         ),
     }
 }

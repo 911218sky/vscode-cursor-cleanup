@@ -1,4 +1,5 @@
 use crate::cleanup::{is_editor_running, wait_until_data_unlocked};
+use crate::cursor_version;
 use crate::fsutil::{
     clear_state_sidecars, copy_best_effort, copy_verified, fmt_size, path_size, sizes_match,
 };
@@ -19,6 +20,8 @@ pub struct BackupInfo {
     pub created: String,
     pub include_state: bool,
     pub bytes: u64,
+    /// Cursor app version recorded at backup time (`None` for older backups).
+    pub cursor_version: Option<String>,
 }
 
 impl BackupInfo {
@@ -29,12 +32,19 @@ impl BackupInfo {
         } else {
             self.name.clone()
         };
+        let ver = self
+            .cursor_version
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(|v| format!("  ·  Cursor {v}"))
+            .unwrap_or_default();
         format!(
-            "{}  ·  {}  ·  {}  ·  {}",
+            "{}  ·  {}  ·  {}  ·  {}{}",
             self.app,
             title,
             state,
-            fmt_size(self.bytes)
+            fmt_size(self.bytes),
+            ver
         )
     }
 }
@@ -139,6 +149,7 @@ fn write_manifest(
     include_state: bool,
     created: &str,
     name: &str,
+    cursor_version: Option<&str>,
 ) -> io::Result<()> {
     let mut f = File::create(dir.join(MANIFEST))?;
     writeln!(f, "app={}", editor.slug())?;
@@ -146,15 +157,19 @@ fn write_manifest(
     writeln!(f, "name={name}")?;
     writeln!(f, "include_state={}", if include_state { "true" } else { "false" })?;
     writeln!(f, "version={}", env!("CARGO_PKG_VERSION"))?;
+    if let Some(v) = cursor_version.map(str::trim).filter(|s| !s.is_empty()) {
+        writeln!(f, "cursor_version={v}")?;
+    }
     Ok(())
 }
 
-fn read_manifest(dir: &Path) -> Option<(String, String, String, bool)> {
+fn read_manifest(dir: &Path) -> Option<(String, String, String, bool, Option<String>)> {
     let text = fs::read_to_string(dir.join(MANIFEST)).ok()?;
     let mut app = String::new();
     let mut created = String::new();
     let mut name = String::new();
     let mut include_state = false;
+    let mut cursor_version = None;
     for line in text.lines() {
         if let Some(v) = line.strip_prefix("app=") {
             app = v.trim().to_string();
@@ -164,6 +179,11 @@ fn read_manifest(dir: &Path) -> Option<(String, String, String, bool)> {
             name = v.trim().to_string();
         } else if let Some(v) = line.strip_prefix("include_state=") {
             include_state = v.trim().eq_ignore_ascii_case("true");
+        } else if let Some(v) = line.strip_prefix("cursor_version=") {
+            let v = v.trim();
+            if !v.is_empty() {
+                cursor_version = Some(v.to_string());
+            }
         }
     }
     if app.is_empty() {
@@ -181,7 +201,7 @@ fn read_manifest(dir: &Path) -> Option<(String, String, String, bool)> {
     if name.is_empty() {
         name = created.clone();
     }
-    Some((app, created, name, include_state))
+    Some((app, created, name, include_state, cursor_version))
 }
 
 /// Create a backup under `…/backups/{slug}-backup-{name|timestamp}/`.
@@ -230,7 +250,15 @@ pub fn create_backup(
         }
     }
 
-    write_manifest(&dir, editor, include_state, &created, &display_name)?;
+    let cursor_version = cursor_version::detect_installed();
+    write_manifest(
+        &dir,
+        editor,
+        include_state,
+        &created,
+        &display_name,
+        cursor_version.as_deref(),
+    )?;
 
     Ok(BackupInfo {
         path: dir.clone(),
@@ -239,6 +267,7 @@ pub fn create_backup(
         created,
         include_state,
         bytes: path_size(&dir),
+        cursor_version,
     })
 }
 
@@ -260,7 +289,7 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
                 continue;
             }
             // Prefer manifest; also accept folders that look like backups
-            let (app, created, name, include_state) = match read_manifest(&path) {
+            let (app, created, name, include_state, cursor_version) = match read_manifest(&path) {
                 Some(m) => m,
                 None => {
                     let folder = path
@@ -275,7 +304,13 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
                         .strip_prefix("cursor-backup-")
                         .unwrap_or(&folder)
                         .to_string();
-                    ("cursor".into(), folder.clone(), tag, path.join("state.vscdb").exists())
+                    (
+                        "cursor".into(),
+                        folder.clone(),
+                        tag,
+                        path.join("state.vscdb").exists(),
+                        None,
+                    )
                 }
             };
 
@@ -296,6 +331,7 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
                 name,
                 created,
                 include_state,
+                cursor_version,
             });
         }
     }
@@ -307,7 +343,7 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
 
 #[cfg(test)]
 mod tests {
-    use super::{path_under_backups_root, sanitize_backup_name};
+    use super::{path_under_backups_root, read_manifest, sanitize_backup_name};
     use std::fs;
 
     #[test]
@@ -333,6 +369,32 @@ mod tests {
     fn sanitize_reserved_windows_names() {
         assert_eq!(sanitize_backup_name("CON").as_deref(), Some("CON-bak"));
         assert_eq!(sanitize_backup_name("nul.txt").as_deref(), Some("nul.txt-bak"));
+    }
+
+    #[test]
+    fn old_manifest_without_cursor_version_still_loads() {
+        let stamp = format!(
+            "oldman-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let dir = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.txt"),
+            "app=cursor\ncreated=2026-01-01-00-00-00-000\nname=legacy\ninclude_state=true\nversion=0.4.3\n",
+        )
+        .unwrap();
+        let m = read_manifest(&dir).expect("legacy manifest");
+        assert_eq!(m.0, "cursor");
+        assert_eq!(m.2, "legacy");
+        assert!(m.3);
+        assert_eq!(m.4, None);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

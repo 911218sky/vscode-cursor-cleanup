@@ -1,6 +1,7 @@
 mod backup;
 mod cleanup;
 mod cli;
+mod cursor_version;
 mod fsutil;
 mod i18n;
 mod paths;

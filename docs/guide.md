@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.4.3** (Cursor-only; confirm before force-quit / restore)
+Version: **v0.4.4** (Cursor-only; confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -53,6 +53,7 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 - Always includes: `settings.json`, `keybindings.json`, `snippets/`
 - Optional: `state.vscdb`
 - Restore / delete: restore one, or Space-select many and Enter to delete
+- Each backup records the Cursor app version; restoring onto an older install asks you to force restore or cancel (newer settings / `state.vscdb` may not be compatible)
 - Prefer closing Cursor yourself before restore when convenient
 
 ### 2. CLI
