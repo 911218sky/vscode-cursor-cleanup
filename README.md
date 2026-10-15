@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.2-brightgreen.svg)
 
 **雙擊即可用的互動清理工具** · 也支援 CLI  
 預設介面：**繁體中文**（可切換簡體／English）
@@ -79,7 +79,7 @@ cursor-cleanup.exe --yes --scope both
 
 ### 卸載（TUI）
 
-主選單 → **卸載 Cursor / CLI…** → 選 **IDE**／**CLI**／**兩者**（需再確認）。卸載 IDE 時 Windows 會請求管理員（UAC），先啟動官方 `Uninstall.exe`，再清 `%APPDATA%\Cursor` 等；只卸載 CLI 時清 `~/.cursor`、`cursor-agent` 與 PATH，不動 IDE。**不刪**各專案目錄內的 `.cursor/`。
+主選單 → **卸載 Cursor / CLI** → 選 **IDE**／**CLI**／**兩者**（需再確認）。卸載 IDE 時 Windows 會請求管理員（UAC），先啟動官方 `Uninstall.exe`，再清 `%APPDATA%\Cursor` 等；只卸載 CLI 時清 `~/.cursor`、`cursor-agent` 與 PATH，不動 IDE。**不刪**各專案目錄內的 `.cursor/`。
 
 ## 清什麼？
 

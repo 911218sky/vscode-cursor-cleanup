@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.5.1** (Cursor-only; uninstall IDE / CLI / both + confirm before force-quit / restore)
+Version: **v0.5.2** (Cursor-only; uninstall IDE / CLI / both + confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)

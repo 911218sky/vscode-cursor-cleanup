@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.2-brightgreen.svg)
 
 **双击即可用的互动清理工具** · 也支持 CLI  
 默认界面语言：**繁体中文**；可选简体 / English
@@ -75,7 +75,7 @@ cursor-cleanup.exe --yes --scope both
 
 ### 卸载（TUI）
 
-主菜单 → **卸载 Cursor / CLI…** → 选 **IDE**／**CLI**／**两者**（需再确认）。卸载 IDE 时 Windows 会请求管理员（UAC），先启动官方 `Uninstall.exe`，再清 `%APPDATA%\Cursor` 等；只卸载 CLI 时清 `~/.cursor`、`cursor-agent` 与 PATH，不动 IDE。**不删**各项目目录内的 `.cursor/`。
+主菜单 → **卸载 Cursor / CLI** → 选 **IDE**／**CLI**／**两者**（需再确认）。卸载 IDE 时 Windows 会请求管理员（UAC），先启动官方 `Uninstall.exe`，再清 `%APPDATA%\Cursor` 等；只卸载 CLI 时清 `~/.cursor`、`cursor-agent` 与 PATH，不动 IDE。**不删**各项目目录内的 `.cursor/`。
 
 ## 清什么？
 

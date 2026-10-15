@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.1-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.2-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
@@ -74,7 +74,7 @@ cursor-cleanup.exe --yes --scope both
 
 ### Uninstall (TUI)
 
-Main menu → **Uninstall Cursor / CLI…** → choose **IDE** / **CLI** / **Both** (extra confirm). Uninstalling the IDE may request UAC on Windows and runs the official `Uninstall.exe` before wiping leftovers like `%APPDATA%\Cursor`. CLI-only removes `~/.cursor`, `cursor-agent`, and PATH — IDE stays. Project-local `.cursor/` folders are **not** deleted.
+Main menu → **Uninstall Cursor / CLI** → choose **IDE** / **CLI** / **Both** (extra confirm). Uninstalling the IDE may request UAC on Windows and runs the official `Uninstall.exe` before wiping leftovers like `%APPDATA%\Cursor`. CLI-only removes `~/.cursor`, `cursor-agent`, and PATH — IDE stays. Project-local `.cursor/` folders are **not** deleted.
 
 ## What it cleans
 
