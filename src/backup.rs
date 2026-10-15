@@ -3,7 +3,9 @@ use crate::cursor_version;
 use crate::fsutil::{
     clear_state_sidecars, copy_best_effort, copy_verified, fmt_size, path_size, sizes_match,
 };
-use crate::paths::{config_rel_paths, exe_dir, timestamp, Editor};
+use crate::paths::{
+    agent_cli_auth_rel_paths, config_rel_paths, exe_dir, timestamp, DataScope, Editor,
+};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -206,15 +208,33 @@ fn read_manifest(dir: &Path) -> Option<(String, String, String, bool, Option<Str
 
 /// Create a backup under `…/backups/{slug}-backup-{name|timestamp}/`.
 /// `custom_name`: optional label; empty / invalid → default timestamp folder name.
+#[allow(dead_code)]
 pub fn create_backup(
     editor: Editor,
+    include_state: bool,
+    custom_name: Option<&str>,
+) -> io::Result<BackupInfo> {
+    create_backup_for(editor, DataScope::Both, include_state, custom_name)
+}
+
+/// Backup contents depend on `scope`:
+/// - IDE: settings (+ `state.vscdb` when `include_state`)
+/// - CLI: `auth.json` (+ `.bak`)
+/// - Both: IDE items above, plus `auth.json` when `include_state`
+pub fn create_backup_for(
+    editor: Editor,
+    scope: DataScope,
     include_state: bool,
     custom_name: Option<&str>,
 ) -> io::Result<BackupInfo> {
     let root = editor
         .data_dir()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "data dir"))?;
-    if !root.exists() {
+    if scope.includes_ide() && !root.exists() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "app data missing"));
+    }
+    if scope == DataScope::Cli && !root.exists() {
+        // auth.json still lives under the IDE data dir.
         return Err(io::Error::new(io::ErrorKind::NotFound, "app data missing"));
     }
 
@@ -230,31 +250,54 @@ pub fn create_backup(
     let dir = allocate_backup_dir(&base, editor, &display_name)?;
     fs::create_dir_all(&dir)?;
 
-    // config files
-    for rel in config_rel_paths() {
-        let src = root.join(rel);
-        if !src.exists() {
-            continue;
+    if scope.includes_ide() {
+        for rel in config_rel_paths() {
+            let src = root.join(rel);
+            if !src.exists() {
+                continue;
+            }
+            let file_name = Path::new(rel)
+                .file_name()
+                .map(|s| s.to_os_string())
+                .unwrap_or_default();
+            copy_best_effort(&src, &dir.join(file_name))?;
         }
-        let file_name = Path::new(rel)
-            .file_name()
-            .map(|s| s.to_os_string())
-            .unwrap_or_default();
-        copy_best_effort(&src, &dir.join(file_name))?;
+        if include_state {
+            let state = root.join("User/globalStorage/state.vscdb");
+            if state.exists() {
+                copy_best_effort(&state, &dir.join("state.vscdb"))?;
+            }
+        }
     }
 
-    if include_state {
-        let state = root.join("User/globalStorage/state.vscdb");
-        if state.exists() {
-            copy_best_effort(&state, &dir.join("state.vscdb"))?;
+    // CLI login: always for CLI-only; with full backup when Both + include_state.
+    let copy_auth = matches!(scope, DataScope::Cli)
+        || (matches!(scope, DataScope::Both) && include_state);
+    if copy_auth {
+        for rel in agent_cli_auth_rel_paths() {
+            let src = root.join(rel);
+            if !src.exists() {
+                continue;
+            }
+            let file_name = Path::new(rel)
+                .file_name()
+                .map(|s| s.to_os_string())
+                .unwrap_or_default();
+            copy_best_effort(&src, &dir.join(file_name))?;
         }
     }
+
+    // Manifest `include_state` means "fuller backup" for restore UX.
+    let manifest_state = match scope {
+        DataScope::Cli => true,
+        DataScope::Ide | DataScope::Both => include_state,
+    };
 
     let cursor_version = cursor_version::detect_installed();
     write_manifest(
         &dir,
         editor,
-        include_state,
+        manifest_state,
         &created,
         &display_name,
         cursor_version.as_deref(),
@@ -265,7 +308,7 @@ pub fn create_backup(
         app: editor.slug().to_string(),
         name: display_name,
         created,
-        include_state,
+        include_state: manifest_state,
         bytes: path_size(&dir),
         cursor_version,
     })
@@ -343,8 +386,13 @@ pub fn list_backups(filter_app: Option<Editor>) -> Vec<BackupInfo> {
 
 #[cfg(test)]
 mod tests {
-    use super::{path_under_backups_root, read_manifest, sanitize_backup_name};
+    use super::{
+        create_backup_for, delete_backup, path_under_backups_root, read_manifest,
+        sanitize_backup_name,
+    };
+    use crate::paths::{DataScope, Editor};
     use std::fs;
+    use std::path::Path;
 
     #[test]
     fn sanitize_empty_is_none() {
@@ -415,6 +463,210 @@ mod tests {
         assert!(!path_under_backups_root(&outside, &root).unwrap());
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&outside);
+    }
+
+    /// Serialize tests that temporarily redirect APPDATA / HOME.
+    fn with_fake_cursor_home<R>(f: impl FnOnce(&Path) -> R) -> R {
+        use std::sync::{Mutex, OnceLock};
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        let _guard = LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+
+        let stamp = format!(
+            "scope-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let base = std::env::temp_dir().join(format!("cursor-cleanup-{stamp}"));
+        let appdata = base.join("AppData");
+        let home = base.join("Home");
+        let cursor = appdata.join("Cursor");
+        let user = cursor.join("User");
+        fs::create_dir_all(user.join("globalStorage")).unwrap();
+        fs::create_dir_all(user.join("snippets")).unwrap();
+        fs::create_dir_all(home.join(".cursor")).unwrap();
+        fs::write(user.join("settings.json"), b"{\"editor.fontSize\":14}").unwrap();
+        fs::write(user.join("keybindings.json"), b"[]").unwrap();
+        fs::write(
+            user.join("globalStorage").join("state.vscdb"),
+            b"fake-state",
+        )
+        .unwrap();
+        fs::write(cursor.join("auth.json"), b"{\"accessToken\":\"tok\"}").unwrap();
+        fs::write(cursor.join("auth.json.bak"), b"{\"accessToken\":\"old\"}").unwrap();
+
+        #[cfg(windows)]
+        {
+            let prev_app = std::env::var_os("APPDATA");
+            let prev_home = std::env::var_os("USERPROFILE");
+            std::env::set_var("APPDATA", &appdata);
+            std::env::set_var("USERPROFILE", &home);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&cursor)));
+            match prev_app {
+                Some(v) => std::env::set_var("APPDATA", v),
+                None => std::env::remove_var("APPDATA"),
+            }
+            match prev_home {
+                Some(v) => std::env::set_var("USERPROFILE", v),
+                None => std::env::remove_var("USERPROFILE"),
+            }
+            let _ = fs::remove_dir_all(&base);
+            match result {
+                Ok(v) => v,
+                Err(p) => std::panic::resume_unwind(p),
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let prev_home = std::env::var_os("HOME");
+            let prev_xdg = std::env::var_os("XDG_CONFIG_HOME");
+            std::env::set_var("HOME", &home);
+            // Linux IDE path uses XDG_CONFIG_HOME/Cursor; macOS uses Application Support.
+            #[cfg(target_os = "macos")]
+            {
+                let support = home.join("Library").join("Application Support").join("Cursor");
+                fs::create_dir_all(support.join("User").join("globalStorage")).unwrap();
+                fs::create_dir_all(support.join("User").join("snippets")).unwrap();
+                fs::copy(user.join("settings.json"), support.join("User").join("settings.json")).unwrap();
+                fs::copy(user.join("keybindings.json"), support.join("User").join("keybindings.json")).unwrap();
+                fs::copy(
+                    user.join("globalStorage").join("state.vscdb"),
+                    support.join("User").join("globalStorage").join("state.vscdb"),
+                )
+                .unwrap();
+                fs::copy(cursor.join("auth.json"), support.join("auth.json")).unwrap();
+                fs::copy(cursor.join("auth.json.bak"), support.join("auth.json.bak")).unwrap();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&support)));
+                match prev_home {
+                    Some(v) => std::env::set_var("HOME", v),
+                    None => std::env::remove_var("HOME"),
+                }
+                let _ = fs::remove_dir_all(&base);
+                match result {
+                    Ok(v) => v,
+                    Err(p) => std::panic::resume_unwind(p),
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                std::env::set_var("XDG_CONFIG_HOME", &appdata);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&cursor)));
+                match prev_home {
+                    Some(v) => std::env::set_var("HOME", v),
+                    None => std::env::remove_var("HOME"),
+                }
+                match prev_xdg {
+                    Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+                    None => std::env::remove_var("XDG_CONFIG_HOME"),
+                }
+                let _ = fs::remove_dir_all(&base);
+                match result {
+                    Ok(v) => v,
+                    Err(p) => std::panic::resume_unwind(p),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn backup_cli_scope_copies_auth_only_then_delete() {
+        with_fake_cursor_home(|_cursor| {
+            let info = create_backup_for(
+                Editor::Cursor,
+                DataScope::Cli,
+                true,
+                Some("unit-cli-scope"),
+            )
+            .expect("cli backup");
+            assert!(info.path.join("auth.json").is_file());
+            assert!(info.path.join("auth.json.bak").is_file());
+            assert!(!info.path.join("settings.json").exists());
+            assert!(!info.path.join("state.vscdb").exists());
+            assert!(info.include_state);
+
+            delete_backup(&info).expect("delete cli backup");
+            assert!(
+                !info.path.exists(),
+                "backup folder should be gone after delete"
+            );
+        });
+    }
+
+    #[test]
+    fn backup_ide_scope_keeps_auth_out_of_config_only() {
+        with_fake_cursor_home(|_cursor| {
+            let info = create_backup_for(
+                Editor::Cursor,
+                DataScope::Ide,
+                false,
+                Some("unit-ide-config"),
+            )
+            .expect("ide config backup");
+            assert!(info.path.join("settings.json").is_file());
+            assert!(!info.path.join("auth.json").exists());
+            assert!(!info.path.join("state.vscdb").exists());
+            delete_backup(&info).expect("delete ide backup");
+            assert!(!info.path.exists());
+        });
+    }
+
+    #[test]
+    fn backup_both_full_includes_state_and_auth() {
+        with_fake_cursor_home(|_cursor| {
+            let info = create_backup_for(
+                Editor::Cursor,
+                DataScope::Both,
+                true,
+                Some("unit-both-full"),
+            )
+            .expect("both full backup");
+            assert!(info.path.join("settings.json").is_file());
+            assert!(info.path.join("state.vscdb").is_file());
+            assert!(info.path.join("auth.json").is_file());
+            delete_backup(&info).expect("delete both backup");
+            assert!(!info.path.exists());
+        });
+    }
+
+    /// Live smoke: copy real CLI auth into backups/, verify, then delete the backup folder.
+    /// Does not modify the live `auth.json`.
+    #[test]
+    fn live_cli_backup_then_delete_smoke() {
+        let Some(root) = Editor::Cursor.data_dir() else {
+            return;
+        };
+        if !root.join("auth.json").is_file() {
+            return;
+        }
+        let info = create_backup_for(
+            Editor::Cursor,
+            DataScope::Cli,
+            true,
+            Some("live-cli-smoke"),
+        )
+        .expect("live cli backup");
+        assert!(
+            info.path.join("auth.json").is_file(),
+            "backup must contain auth.json"
+        );
+        assert!(
+            !info.path.join("settings.json").exists(),
+            "CLI scope must not copy IDE settings"
+        );
+        assert!(
+            !info.path.join("state.vscdb").exists(),
+            "CLI scope must not copy state.vscdb"
+        );
+        // Live auth must still be present after backup.
+        assert!(root.join("auth.json").is_file());
+        delete_backup(&info).expect("delete live cli backup");
+        assert!(!info.path.exists());
+        assert!(
+            root.join("auth.json").is_file(),
+            "deleting backup must not remove live auth.json"
+        );
     }
 }
 
@@ -513,6 +765,15 @@ pub fn restore_backup(info: &BackupInfo) -> io::Result<()> {
         verify_restored(&state_src, &state_dst)?;
         // Ensure sidecars did not reappear empty / stale from a race.
         clear_state_sidecars(&global)?;
+    }
+
+    for name in ["auth.json", "auth.json.bak"] {
+        let src = info.path.join(name);
+        if src.exists() {
+            let dst = root.join(name);
+            copy_verified(&src, &dst, 10)?;
+            verify_restored(&src, &dst)?;
+        }
     }
 
     Ok(())

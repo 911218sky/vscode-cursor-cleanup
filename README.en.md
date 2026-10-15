@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.4.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
@@ -53,32 +53,42 @@ This project is **Cursor-only** and adds:
 2. Download **`cursor-cleanup.exe`** (or the `.zip` and unzip)
 3. **Double-click `cursor-cleanup.exe`**
 4. Pick language → use ↑↓ + Enter (Back available)
-5. Press **Enter** to close when finished
+5. Main menu: **Clean** / **Backup** / **Restore** / **Fully uninstall** / Exit
 
 ## CLI
 
 ```powershell
 cursor-cleanup.exe --lang en
-cursor-cleanup.exe --lang en --scan
-cursor-cleanup.exe --yes
+cursor-cleanup.exe --scan --scope ide
+cursor-cleanup.exe --scan --scope cli
+cursor-cleanup.exe --yes --scope both
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `--lang zh-TW\|zh-CN\|en` | UI language (default `zh-TW`) |
+| `--scope ide\|cli\|both` | Data scope (default `both`) |
 | `--scan` | Scan only |
-| `--yes` | Auto-clean safe items (skips if Cursor is running) |
+| `--yes` | Auto-clean safe items (skips if scope processes are running) |
 | `--no-pause` | No pause on exit |
+
+### Full uninstall (TUI)
+
+Main menu → **Fully uninstall Cursor / CLI** (extra confirm). On Windows, UAC elevation may be requested; the official `Uninstall.exe` runs first, then leftovers such as `%APPDATA%\Cursor`, `%USERPROFILE%\.cursor`, and `%LOCALAPPDATA%\cursor-agent` are removed. Project-local `.cursor/` folders are **not** deleted.
+
+TUI asks first: **Cursor IDE**, **Agent CLI**, or **Both**.
 
 ## What it cleans
 
 | Risk | Items |
 |------|-------|
-| Safe | CachedData, extension VSIX cache, GPU/Cache, logs |
-| Medium | Local edit History |
-| High | `state.vscdb` (AI chats / recent files / UI) |
+| Safe | CachedData, extension VSIX cache, GPU/Cache, logs, **Agent CLI caches** (`~/.cursor`) |
+| Medium | Local edit History, **Agent CLI state / chats / projects** |
+| High | `state.vscdb` (AI chats / recent files / UI), **Agent CLI login `auth.json`** |
 
-Does **not** delete project code or installed extensions.
+Normal **Clean** does **not** delete project code, installed extensions, or the Agent CLI install. **Fully uninstall** removes the install and user data (see above).
+
+Force-quit stops only processes for the chosen scope. Full “Both” backup includes `auth.json`.
 
 ## Docs
 

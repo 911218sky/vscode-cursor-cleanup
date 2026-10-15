@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.4.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-brightgreen.svg)
 
 **雙擊即可用的互動清理工具** · 也支援 CLI  
 預設介面：**繁體中文**（可切換簡體／English）
@@ -56,33 +56,42 @@
 2. 下載 **`cursor-cleanup.exe`**（或 zip 再解壓）
 3. **雙擊 `cursor-cleanup.exe`**
 4. 先選語言（預設繁中）→ ↑↓ + Enter 操作（可「← 返回」）
-5. 結束後按 **Enter** 關閉視窗
+5. 主選單含：**清理**／**備份**／**恢復**／**完整卸載**／退出
+6. 結束後視情況關閉視窗（選「退出」會立刻結束）
 
 ## CLI
 
 ```powershell
 cursor-cleanup.exe
 cursor-cleanup.exe --lang zh-CN
-cursor-cleanup.exe --lang en --scan
-cursor-cleanup.exe --yes
+cursor-cleanup.exe --scan --scope ide
+cursor-cleanup.exe --scan --scope cli
+cursor-cleanup.exe --yes --scope both
 ```
 
 | 參數 | 說明 |
 |------|------|
 | `--lang zh-TW\|zh-CN\|en` | 語言（預設 `zh-TW`） |
+| `--scope ide\|cli\|both` | 資料範圍（預設 `both`） |
 | `--scan` | 只掃描 |
-| `--yes` | 自動清安全項（Cursor 執行中會略過） |
+| `--yes` | 自動清安全項（對應 scope 行程中會略過） |
 | `--no-pause` | 結束不暫停 |
+
+### 完整卸載（TUI）
+
+主選單 → **完整卸載 Cursor / CLI**（需再確認）。Windows 會請求管理員（UAC），先啟動官方 `Uninstall.exe`，結束後再清除 `%APPDATA%\Cursor`、`%USERPROFILE%\.cursor`、`%LOCALAPPDATA%\cursor-agent` 等殘留。**不刪**各專案目錄內的 `.cursor/`。
 
 ## 清什麼？
 
 | 風險 | 內容 |
 |------|------|
-| 安全 | CachedData、擴充快取、GPU/Cache、logs |
-| 中等 | 本機編輯歷史 History |
-| 高危 | `state.vscdb`（AI 聊天／最近檔案／UI） |
+| 安全 | CachedData、擴充快取、GPU/Cache、logs、**Agent CLI 快取**（`~/.cursor`） |
+| 中等 | 本機編輯歷史 History、**Agent CLI 狀態 / chats / projects** |
+| 高危 | `state.vscdb`（AI 聊天／最近檔案／UI）、**Agent CLI 登入 `auth.json`** |
 
-不刪：專案程式碼、已安裝擴充本體。
+一般「清理」不刪：專案程式碼、已安裝擴充本體、Agent CLI 安裝目錄。**完整卸載**會移除安裝與使用者資料（見上）。
+
+強制關閉只結束所選範圍行程；完整「兩者」備份含 `auth.json`。
 
 ## 文件
 

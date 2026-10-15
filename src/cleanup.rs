@@ -1,7 +1,9 @@
 use crate::fsutil::{
     path_size, probe_path_unlocked, remove_best_effort, unlock_probe_paths,
 };
-use crate::paths::{clean_targets, is_safe_rel_path, CleanTarget, Editor};
+use crate::paths::{
+    clean_targets_for, is_safe_rel_path, CleanTarget, DataRoot, DataScope, Editor,
+};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -14,8 +16,13 @@ pub struct TargetStat {
 }
 
 #[cfg(windows)]
-fn windows_images(_editor: Editor) -> &'static [&'static str] {
-    &["Cursor.exe"]
+fn windows_images(_editor: Editor, scope: DataScope) -> &'static [&'static str] {
+    // Exact image names — kill only processes that lock the chosen scope.
+    match scope {
+        DataScope::Ide => &["Cursor.exe"],
+        DataScope::Cli => &["agent.exe", "cursor-agent.exe"],
+        DataScope::Both => &["Cursor.exe", "agent.exe", "cursor-agent.exe"],
+    }
 }
 
 #[cfg(windows)]
@@ -70,14 +77,23 @@ fn kill_windows_images(images: &[&str]) {
 }
 
 pub fn is_editor_running(editor: Editor) -> bool {
+    is_scope_running(editor, DataScope::Both)
+}
+
+pub fn is_scope_running(editor: Editor, scope: DataScope) -> bool {
     #[cfg(windows)]
     {
-        return is_any_image_running(windows_images(editor));
+        let _ = editor;
+        return is_any_image_running(windows_images(editor, scope));
     }
 
     #[cfg(not(windows))]
     {
-        let names = editor.process_names();
+        let names: &[&str] = match scope {
+            DataScope::Ide => &["Cursor", "cursor"],
+            DataScope::Cli => &["agent", "cursor-agent"],
+            DataScope::Both => editor.process_names(),
+        };
         // pgrep -x may not exist everywhere; fall back to ps
         for n in names {
             if Command::new("pgrep")
@@ -105,16 +121,36 @@ pub fn is_editor_running(editor: Editor) -> bool {
     }
 }
 
-/// Wait until Cursor data files are unlocked (rename probe), up to ~20s.
+/// Wait until Cursor / Agent CLI data files are unlocked (rename probe), up to ~20s.
 /// Missing paths count as unlocked. Returns false on timeout.
 pub fn wait_until_data_unlocked(editor: Editor, quiet: bool) -> bool {
-    let Some(root) = editor.data_dir() else {
-        return true;
-    };
-    if !root.exists() {
+    wait_until_scope_unlocked(editor, DataScope::Both, quiet)
+}
+
+pub fn wait_until_scope_unlocked(editor: Editor, scope: DataScope, quiet: bool) -> bool {
+    let mut probes = Vec::new();
+    if scope.includes_ide() {
+        if let Some(root) = editor.data_dir() {
+            if root.exists() {
+                probes.extend(unlock_probe_paths(&root));
+            }
+        }
+    }
+    if scope.includes_cli() {
+        if let Some(root) = editor.data_dir() {
+            if root.exists() {
+                probes.push(root.join("auth.json"));
+            }
+        }
+        if let Some(home) = editor.cursor_home() {
+            if home.exists() {
+                probes.push(home.join("agent-cli-state.json"));
+            }
+        }
+    }
+    if probes.is_empty() {
         return true;
     }
-    let probes = unlock_probe_paths(&root);
     // Brief settle even when the process was already gone.
     std::thread::sleep(Duration::from_millis(500));
     for i in 0..40 {
@@ -143,14 +179,23 @@ pub fn wait_until_data_unlocked(editor: Editor, quiet: bool) -> bool {
 /// Force-quit editor processes, wait until gone, then wait for data files to unlock.
 /// Returns true only when the process is gone and critical paths are writable.
 /// `quiet`: suppress progress dots on stdout (use in TUI alternate screen).
+#[allow(dead_code)]
 pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
-    if is_editor_running(editor) {
+    force_quit_scope(editor, DataScope::Both, quiet)
+}
+
+pub fn force_quit_scope(editor: Editor, scope: DataScope, quiet: bool) -> bool {
+    if is_scope_running(editor, scope) {
         #[cfg(windows)]
-        kill_windows_images(windows_images(editor));
+        kill_windows_images(windows_images(editor, scope));
 
         #[cfg(not(windows))]
         {
-            let names = editor.process_names();
+            let names: &[&str] = match scope {
+                DataScope::Ide => &["Cursor", "cursor"],
+                DataScope::Cli => &["agent", "cursor-agent"],
+                DataScope::Both => editor.process_names(),
+            };
             for n in names {
                 let _ = Command::new("pkill")
                     .args(["-9", "-x", n])
@@ -180,14 +225,14 @@ pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
                 let _ = io::stdout().write_all(b".");
                 let _ = io::stdout().flush();
             }
-            if !is_editor_running(editor) {
+            if !is_scope_running(editor, scope) {
                 gone = true;
                 break;
             }
             // Re-issue kill every few probes in case child processes respawned briefly
             if i > 0 && i % 4 == 0 {
                 #[cfg(windows)]
-                kill_windows_images(windows_images(editor));
+                kill_windows_images(windows_images(editor, scope));
             }
         }
 
@@ -196,11 +241,11 @@ pub fn force_quit_editor(editor: Editor, quiet: bool) -> bool {
         }
     }
 
-    if is_editor_running(editor) {
+    if is_scope_running(editor, scope) {
         return false;
     }
 
-    wait_until_data_unlocked(editor, quiet)
+    wait_until_scope_unlocked(editor, scope, quiet)
 }
 
 /// Candidate install paths for Cursor on Windows under a given LOCALAPPDATA root.
@@ -381,13 +426,28 @@ pub fn launch_editor(editor: Editor) -> bool {
     }
 }
 
+#[allow(dead_code)]
 pub fn collect_stats(editor: Editor) -> Option<(PathBuf, u64, Vec<TargetStat>)> {
-    let root = editor.data_dir()?;
+    collect_stats_for(editor, DataScope::Both)
+}
+
+pub fn collect_stats_for(
+    editor: Editor,
+    scope: DataScope,
+) -> Option<(PathBuf, u64, Vec<TargetStat>)> {
+    // Primary display root: IDE dir, or CLI home when scope is CLI-only.
+    let root = if scope == DataScope::Cli {
+        editor.cursor_home().or_else(|| editor.data_dir())?
+    } else {
+        editor.data_dir()?
+    };
     let mut stats = Vec::new();
-    for target in clean_targets() {
+    for target in clean_targets_for(scope) {
         let mut bytes = 0u64;
-        for rel in target.rel_paths {
-            bytes += path_size(&root.join(rel));
+        if let Some(base) = editor.data_root(target.root) {
+            for rel in target.rel_paths {
+                bytes += path_size(&base.join(rel));
+            }
         }
         stats.push(TargetStat { target, bytes });
     }
@@ -397,16 +457,21 @@ pub fn collect_stats(editor: Editor) -> Option<(PathBuf, u64, Vec<TargetStat>)> 
 }
 
 /// Re-measure known cleanup targets only (not the whole data root).
-pub fn sum_target_sizes(root: &std::path::Path, stats: &[TargetStat]) -> u64 {
+pub fn sum_target_sizes(editor: Editor, stats: &[TargetStat]) -> u64 {
     stats
         .iter()
-        .map(|s| {
-            s.target
-                .rel_paths
-                .iter()
-                .map(|rel| path_size(&root.join(rel)))
-                .sum::<u64>()
-        })
+        .map(|s| target_size(editor, &s.target))
+        .sum()
+}
+
+fn target_size(editor: Editor, target: &CleanTarget) -> u64 {
+    let Some(base) = editor.data_root(target.root) else {
+        return 0;
+    };
+    target
+        .rel_paths
+        .iter()
+        .map(|rel| path_size(&base.join(rel)))
         .sum()
 }
 
@@ -435,7 +500,19 @@ fn join_under_root(root: &std::path::Path, rel: &str) -> Option<std::path::PathB
     Some(joined)
 }
 
-pub fn run_target(root: &std::path::Path, target: &CleanTarget) -> CleanResult {
+pub fn run_target(editor: Editor, target: &CleanTarget) -> CleanResult {
+    let Some(root) = editor.data_root(target.root) else {
+        return CleanResult {
+            freed: 0,
+            errors: 1,
+            remaining: 0,
+        };
+    };
+    run_target_under(&root, target)
+}
+
+/// Delete `target.rel_paths` under an already-resolved root (tests + internal).
+pub fn run_target_under(root: &std::path::Path, target: &CleanTarget) -> CleanResult {
     let mut freed = 0u64;
     let mut errors = 0usize;
     for rel in target.rel_paths {
@@ -470,10 +547,18 @@ pub fn run_target(root: &std::path::Path, target: &CleanTarget) -> CleanResult {
     }
 }
 
+/// Whether any cleanup target uses the Cursor / Agent CLI home tree.
+#[allow(dead_code)]
+pub fn has_cursor_home_targets(stats: &[TargetStat]) -> bool {
+    stats
+        .iter()
+        .any(|s| matches!(s.target.root, DataRoot::CursorHome))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{join_under_root, run_target, windows_cursor_candidates};
-    use crate::paths::{CleanTarget, Risk, TargetKind};
+    use super::{join_under_root, run_target_under, windows_cursor_candidates};
+    use crate::paths::{CleanTarget, DataRoot, Risk, TargetKind};
     use std::fs;
     use std::path::PathBuf;
 
@@ -517,9 +602,10 @@ mod tests {
         let evil = CleanTarget {
             kind: TargetKind::CachedData,
             risk: Risk::Safe,
+            root: DataRoot::Ide,
             rel_paths: &["../cursor-cleanup-must-not-escape"],
         };
-        let result = run_target(&root, &evil);
+        let result = run_target_under(&root, &evil);
         assert!(result.errors > 0);
         assert!(victim.exists(), "must not delete outside data root");
         let _ = fs::remove_dir_all(&root);

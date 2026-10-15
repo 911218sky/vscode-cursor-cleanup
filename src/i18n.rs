@@ -22,7 +22,6 @@ impl Lang {
         }
     }
 
-    #[allow(dead_code)]
     pub fn code(self) -> &'static str {
         match self {
             Lang::ZhTw => "zh-TW",
@@ -65,7 +64,6 @@ tr! {
     Back => { tw: "← 返回", cn: "← 返回", en: "← Back" },
     BannerHint => { tw: "滑鼠點選 / ↑↓ Enter  ·  Esc 返回", cn: "鼠标点选 / ↑↓ Enter  ·  Esc 返回", en: "Click / ↑↓ Enter  ·  Esc Back" },
     PauseExit => { tw: "按 Enter 關閉視窗…", cn: "按 Enter 关闭窗口…", en: "Press Enter to close…" },
-    PressEnterMenu => { tw: "按 Enter 回主選單…", cn: "按 Enter 回主菜单…", en: "Press Enter for main menu…" },
     PickLang => { tw: "選擇語言 / Language", cn: "选择语言 / Language", en: "Language" },
     LangTw => { tw: "繁體中文", cn: "繁体中文", en: "Traditional Chinese" },
     LangCn => { tw: "简体中文", cn: "简体中文", en: "Simplified Chinese" },
@@ -87,9 +85,9 @@ tr! {
     AboutToClean => { tw: "即將清理：", cn: "即将清理：", en: "Will clean:" },
     ForceQuitOk => { tw: "已強制關閉", cn: "已强制关闭", en: "Force-quit done" },
     ForceQuitFail => { tw: "無法完全關閉，檔案可能仍被鎖定", cn: "无法完全关闭，文件可能仍被锁定", en: "Could not fully quit; files may stay locked" },
-    ForceQuitting => { tw: "正在強制關閉 Cursor…", cn: "正在强制关闭 Cursor…", en: "Force-quitting Cursor…" },
+    ForceQuitting => { tw: "正在強制關閉 Cursor / Agent CLI…", cn: "正在强制关闭 Cursor / Agent CLI…", en: "Force-quitting Cursor / Agent CLI…" },
     ConfirmForceQuit => { tw: "正在執行，確定要強制關閉？未儲存的變更可能遺失。", cn: "正在运行，确定要强制关闭？未保存的更改可能丢失。", en: "is running — force quit? Unsaved changes may be lost." },
-    EditorRunningAbort => { tw: "應用仍在執行，已略過清理（請先關閉，或改用 TUI 強制關閉）", cn: "应用仍在运行，已跳过清理（请先关闭，或改用 TUI 强制关闭）", en: "App still running — skipped cleanup (close it first, or use TUI force-quit)" },
+    EditorRunningAbort => { tw: "Cursor 或 Agent CLI 仍在執行，已略過清理（請先關閉，或改用 TUI 強制關閉）", cn: "Cursor 或 Agent CLI 仍在运行，已跳过清理（请先关闭，或改用 TUI 强制关闭）", en: "Cursor or Agent CLI still running — skipped cleanup (close it first, or use TUI force-quit)" },
     Done => { tw: "完成", cn: "完成", en: "done" },
     Partial => { tw: "部分", cn: "部分", en: "partial" },
     AllDone => { tw: "全部完成", cn: "全部完成", en: "All done" },
@@ -97,22 +95,52 @@ tr! {
     TargetExt => { tw: "擴充安裝包快取", cn: "扩展安装包缓存", en: "Extension VSIX cache" },
     TargetGpu => { tw: "GPU / 渲染快取", cn: "GPU / 渲染缓存", en: "GPU / render caches" },
     TargetLogs => { tw: "日誌 logs", cn: "日志 logs", en: "logs" },
+    TargetAgentCliCache => { tw: "Agent CLI 快取 (~/.cursor)", cn: "Agent CLI 缓存 (~/.cursor)", en: "Agent CLI caches (~/.cursor)" },
     TargetHistory => { tw: "本機編輯歷史 History", cn: "本地编辑历史 History", en: "Local edit history" },
+    TargetAgentCliState => { tw: "Agent CLI 狀態 / chats / projects", cn: "Agent CLI 状态 / chats / projects", en: "Agent CLI state / chats / projects" },
     TargetState => { tw: "狀態庫 state.vscdb", cn: "状态库 state.vscdb", en: "State DB state.vscdb" },
+    TargetAgentCliAuth => { tw: "Agent CLI 登入 auth.json", cn: "Agent CLI 登录 auth.json", en: "Agent CLI login auth.json" },
     MainMenu => { tw: "主選單", cn: "主菜单", en: "Main menu" },
     MenuClean => { tw: "清理快取 / 狀態", cn: "清理缓存 / 状态", en: "Clean caches / state" },
     MenuBackup => { tw: "備份", cn: "备份", en: "Backup" },
     MenuRestore => { tw: "恢復 / 刪除備份", cn: "恢复 / 删除备份", en: "Restore / delete backups" },
+    MenuUninstall => { tw: "完整卸載 Cursor / CLI", cn: "完整卸载 Cursor / CLI", en: "Fully uninstall Cursor / CLI" },
+    ConfirmUninstall => { tw: "將完整移除 Cursor IDE 與 Agent CLI（含設定、聊天、登入、擴充與 CLI）。Windows 會先開啟官方卸載程式，結束後再清除殘留資料夾。需要系統管理員權限。專案內的 .cursor 不會刪除。確定？", cn: "将完整移除 Cursor IDE 与 Agent CLI（含设置、聊天、登录、扩展与 CLI）。Windows 会先打开官方卸载程序，结束后再清除残留文件夹。需要管理员权限。项目内的 .cursor 不会删除。确定？", en: "This permanently removes Cursor IDE and Agent CLI (settings, chats, login, extensions, CLI). On Windows the official uninstaller runs first, then leftover folders are deleted. Administrator rights required. Project .cursor folders are not touched. Continue?" },
+    UninstallNeedAdmin => { tw: "需要系統管理員權限，正在請求 UAC…", cn: "需要管理员权限，正在请求 UAC…", en: "Administrator required — requesting UAC…" },
+    UninstallElevateFail => { tw: "無法以管理員身分啟動（已取消或失敗）", cn: "无法以管理员身份启动（已取消或失败）", en: "Could not start elevated (cancelled or failed)" },
+    UninstallRunning => { tw: "正在完整卸載 Cursor…", cn: "正在完整卸载 Cursor…", en: "Fully uninstalling Cursor…" },
+    UninstallStepQuit => { tw: "強制關閉 Cursor / Agent CLI…", cn: "强制关闭 Cursor / Agent CLI…", en: "Force-quitting Cursor / Agent CLI…" },
+    UninstallStepUninstaller => { tw: "啟動官方卸載程式（請在視窗中完成）", cn: "启动官方卸载程序（请在窗口中完成）", en: "Launching official uninstaller (finish in the window)" },
+    UninstallStepLeftovers => { tw: "清除殘留資料夾…", cn: "清除残留文件夹…", en: "Removing leftover folders…" },
+    UninstallStepPath => { tw: "從使用者 PATH 移除 cursor-agent…", cn: "从用户 PATH 移除 cursor-agent…", en: "Removing cursor-agent from user PATH…" },
+    UninstallNoUninstaller => { tw: "找不到官方 Uninstall.exe，改為直接清除已知路徑", cn: "找不到官方 Uninstall.exe，改为直接清除已知路径", en: "Official Uninstall.exe not found — removing known paths only" },
+    UninstallUninstallerOk => { tw: "官方卸載程式已結束", cn: "官方卸载程序已结束", en: "Official uninstaller finished" },
+    UninstallUninstallerFail => { tw: "官方卸載程式未成功結束", cn: "官方卸载程序未成功结束", en: "Official uninstaller did not finish successfully" },
+    UninstallRemovedCount => { tw: "已移除", cn: "已移除", en: "Removed" },
+    UninstallFailedCount => { tw: "失敗", cn: "失败", en: "failed" },
+    UninstallPathCleaned => { tw: "已更新使用者 PATH", cn: "已更新用户 PATH", en: "Updated user PATH" },
+    UninstallDone => { tw: "完整卸載完成", cn: "完整卸载完成", en: "Full uninstall complete" },
+    UninstallDonePartial => { tw: "卸載完成，但部分項目失敗", cn: "卸载完成，但部分项目失败", en: "Uninstall finished with some failures" },
+    PickScope => { tw: "選擇資料範圍", cn: "选择数据范围", en: "Choose data scope" },
+    ScopeIde => { tw: "Cursor IDE（編輯器）", cn: "Cursor IDE（编辑器）", en: "Cursor IDE (editor)" },
+    ScopeCli => { tw: "Agent CLI（終端 agent）", cn: "Agent CLI（终端 agent）", en: "Agent CLI (terminal agent)" },
+    ScopeBoth => { tw: "兩者都要", cn: "两者都要", en: "Both" },
     BackupMode => { tw: "備份內容", cn: "备份内容", en: "Backup contents" },
     BackupConfigOnly => { tw: "僅設定（settings / keybindings / snippets）", cn: "仅配置（settings / keybindings / snippets）", en: "Config only (settings / keybindings / snippets)" },
     BackupConfigState => { tw: "設定 + state.vscdb（推薦完整）", cn: "配置 + state.vscdb（推荐完整）", en: "Config + state.vscdb (recommended)" },
+    BackupConfigStateBoth => { tw: "設定 + state.vscdb + CLI 登入（推薦完整）", cn: "配置 + state.vscdb + CLI 登录（推荐完整）", en: "Config + state.vscdb + CLI login (recommended)" },
+    BackupCliAuth => { tw: "備份 Agent CLI 登入（auth.json）", cn: "备份 Agent CLI 登录（auth.json）", en: "Backup Agent CLI login (auth.json)" },
+    ConfirmDeepCleanIde => { tw: "將刪除 state.vscdb。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 state.vscdb。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes state.vscdb. Irreversible without a backup. Continue?" },
+    ConfirmDeepCleanCli => { tw: "將刪除 Agent CLI 登入（auth.json）。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 Agent CLI 登录（auth.json）。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes Agent CLI login (auth.json). Irreversible without a backup. Continue?" },
     BackupNameAsk => { tw: "備份名稱（資料夾名）", cn: "备份名称（文件夹名）", en: "Backup name (folder)" },
     BackupNameHint => { tw: "可自訂名稱；直接 Enter＝預設時間戳（如 cursor-backup-2026-10-07-…）", cn: "可自定义名称；直接 Enter＝默认时间戳（如 cursor-backup-2026-10-07-…）", en: "Custom name OK; Enter alone = default timestamp (e.g. cursor-backup-2026-10-07-…)" },
     BackupNameInvalid => { tw: "名稱無效，將改用預設時間戳", cn: "名称无效，将改用默认时间戳", en: "Invalid name — using default timestamp instead" },
     ConfirmDelete => { tw: "確定刪除所選備份？", cn: "确定删除所选备份？", en: "Delete selected backups?" },
     ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
     ConfirmRestoreRunning => { tw: "Cursor 正在執行 — 恢復前必須先關閉（下一步會詢問是否強制關閉）。", cn: "Cursor 正在运行 — 恢复前必须先关闭（下一步会询问是否强制关闭）。", en: "Cursor is running — must close before restore (you will be asked to force quit next)." },
-    ConfirmDeepClean => { tw: "將刪除 state.vscdb（AI 聊天／登入相關／UI 狀態）。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 state.vscdb（AI 聊天／登录相关／UI 状态）。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes state.vscdb (AI chats / login-related / UI state). Irreversible without a backup. Continue?" },
+    ConfirmDeepClean => { tw: "將刪除 state.vscdb 與 Agent CLI 登入（auth.json）。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 state.vscdb 与 Agent CLI 登录（auth.json）。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes state.vscdb and Agent CLI login (auth.json). Irreversible without a backup. Continue?" },
+    ForceQuittingIde => { tw: "正在強制關閉 Cursor IDE…", cn: "正在强制关闭 Cursor IDE…", en: "Force-quitting Cursor IDE…" },
+    ForceQuittingCli => { tw: "正在強制關閉 Agent CLI…", cn: "正在强制关闭 Agent CLI…", en: "Force-quitting Agent CLI…" },
     RestoreEditorRunning => { tw: "Cursor 仍在執行，無法寫入設定檔", cn: "Cursor 仍在运行，无法写入配置文件", en: "Cursor still running — cannot write config files" },
     DataStillLocked => { tw: "資料檔仍被鎖定 — 請手動關閉 Cursor 後再試", cn: "数据文件仍被锁定 — 请手动关闭 Cursor 后再试", en: "Data files still locked — close Cursor manually and retry" },
     RestoreVerified => { tw: "已驗證檔案大小相符", cn: "已验证文件大小相符", en: "Verified file sizes match" },
@@ -160,8 +188,11 @@ pub fn target_title(kind: crate::paths::TargetKind) -> &'static str {
         crate::paths::TargetKind::ExtVsix => t(Msg::TargetExt),
         crate::paths::TargetKind::Gpu => t(Msg::TargetGpu),
         crate::paths::TargetKind::Logs => t(Msg::TargetLogs),
+        crate::paths::TargetKind::AgentCliCache => t(Msg::TargetAgentCliCache),
         crate::paths::TargetKind::History => t(Msg::TargetHistory),
+        crate::paths::TargetKind::AgentCliState => t(Msg::TargetAgentCliState),
         crate::paths::TargetKind::State => t(Msg::TargetState),
+        crate::paths::TargetKind::AgentCliAuth => t(Msg::TargetAgentCliAuth),
     }
 }
 
@@ -175,25 +206,83 @@ pub fn plan_conservative(size: &str) -> String {
 
 pub fn plan_standard(size: &str) -> String {
     match lang() {
-        Lang::ZhTw => format!("標準清理 — 安全+編輯歷史（不動 state／設定／專案）（約 {size}）"),
-        Lang::ZhCn => format!("标准清理 — 安全+编辑历史（不动 state／配置／项目）（约 {size}）"),
-        Lang::En => format!("Standard — safe + history (keeps state/settings/projects) (~{size})"),
+        Lang::ZhTw => format!("標準清理 — 安全+中等（不動高危／設定）（約 {size}）"),
+        Lang::ZhCn => format!("标准清理 — 安全+中等（不动高危／配置）（约 {size}）"),
+        Lang::En => format!("Standard — safe + medium (keeps high-risk/settings) (~{size})"),
     }
 }
 
 pub fn plan_deep(size: &str) -> String {
     match lang() {
-        Lang::ZhTw => format!("深度清理 — 含 state.vscdb（聊天／登入相關）（約 {size}）"),
-        Lang::ZhCn => format!("深度清理 — 含 state.vscdb（聊天／登录相关）（约 {size}）"),
-        Lang::En => format!("Deep — includes state.vscdb (chats / login-related) (~{size})"),
+        Lang::ZhTw => format!("深度清理 — 含高危項（約 {size}）"),
+        Lang::ZhCn => format!("深度清理 — 含高危项（约 {size}）"),
+        Lang::En => format!("Deep — includes high-risk items (~{size})"),
     }
 }
 
+pub fn confirm_deep_clean(has_state: bool, has_auth: bool) -> &'static str {
+    match (has_state, has_auth) {
+        (true, true) => t(Msg::ConfirmDeepClean),
+        (true, false) => t(Msg::ConfirmDeepCleanIde),
+        (false, true) => t(Msg::ConfirmDeepCleanCli),
+        (false, false) => t(Msg::ConfirmDeepClean),
+    }
+}
+
+pub fn force_quitting_label(scope: crate::paths::DataScope) -> &'static str {
+    match scope {
+        crate::paths::DataScope::Ide => t(Msg::ForceQuittingIde),
+        crate::paths::DataScope::Cli => t(Msg::ForceQuittingCli),
+        crate::paths::DataScope::Both => t(Msg::ForceQuitting),
+    }
+}
+
+pub fn scope_short(scope: crate::paths::DataScope) -> &'static str {
+    match scope {
+        crate::paths::DataScope::Ide => "IDE",
+        crate::paths::DataScope::Cli => "CLI",
+        crate::paths::DataScope::Both => "IDE+CLI",
+    }
+}
+
+pub fn fmt_running_scope(scope: crate::paths::DataScope) -> String {
+    match (lang(), scope) {
+        (Lang::ZhTw, crate::paths::DataScope::Ide) => {
+            "Cursor IDE 正在執行 — 部分檔案可能被鎖定".into()
+        }
+        (Lang::ZhTw, crate::paths::DataScope::Cli) => {
+            "Agent CLI 正在執行 — 部分檔案可能被鎖定".into()
+        }
+        (Lang::ZhTw, crate::paths::DataScope::Both) => {
+            "Cursor IDE／Agent CLI 正在執行 — 部分檔案可能被鎖定".into()
+        }
+        (Lang::ZhCn, crate::paths::DataScope::Ide) => {
+            "Cursor IDE 正在运行 — 部分文件可能被锁定".into()
+        }
+        (Lang::ZhCn, crate::paths::DataScope::Cli) => {
+            "Agent CLI 正在运行 — 部分文件可能被锁定".into()
+        }
+        (Lang::ZhCn, crate::paths::DataScope::Both) => {
+            "Cursor IDE／Agent CLI 正在运行 — 部分文件可能被锁定".into()
+        }
+        (Lang::En, crate::paths::DataScope::Ide) => {
+            "Cursor IDE is running — some files may be locked".into()
+        }
+        (Lang::En, crate::paths::DataScope::Cli) => {
+            "Agent CLI is running — some files may be locked".into()
+        }
+        (Lang::En, crate::paths::DataScope::Both) => {
+            "Cursor IDE / Agent CLI is running — some files may be locked".into()
+        }
+    }
+}
+
+#[allow(dead_code)]
 pub fn fmt_running(name: &str) -> String {
     match lang() {
-        Lang::ZhTw => format!("{name} 正在執行 — 部分檔案可能被鎖定"),
-        Lang::ZhCn => format!("{name} 正在运行 — 部分文件可能被锁定"),
-        Lang::En => format!("{name} is running — some files may be locked"),
+        Lang::ZhTw => format!("{name}／Agent CLI 正在執行 — 部分檔案可能被鎖定"),
+        Lang::ZhCn => format!("{name}／Agent CLI 正在运行 — 部分文件可能被锁定"),
+        Lang::En => format!("{name} / Agent CLI is running — some files may be locked"),
     }
 }
 
@@ -273,19 +362,22 @@ cursor-cleanup  —  Cursor 清理 / 備份工具
 
 用法:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --scan --scope ide
+  cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang en
 
 選項:
   -l, --lang <zh-TW|zh-CN|en>     語言（預設 zh-TW）
-  -y, --yes                       非互動，只清安全項（Cursor 執行中會略過）
+  -s, --scope <ide|cli|both>      資料範圍（預設 both；TUI 會再詢問）
+  -y, --yes                       非互動，只清安全項（對應 scope 行程中會略過）
       --scan                      只掃描占用
+      --uninstall-run             完整卸載（管理員／內部用）
       --no-pause                  結束不暫停
   -h, --help                      說明
   -V, --version                   版本
 
-無參數：TUI 互動（滑鼠 + 鍵盤）— 清理 / 備份 / 恢復／刪除備份
---scan / --yes：CLI 純文字輸出
+無參數：TUI 互動 — 清理／備份／恢復／完整卸載
+--scan / --yes：純文字輸出（可用 --scope）
 備份位置：與程式同目錄的 backups\\\\
 "
         .into(),
@@ -294,19 +386,22 @@ cursor-cleanup  —  Cursor 清理 / 备份工具
 
 用法:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --scan --scope ide
+  cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang en
 
 选项:
   -l, --lang <zh-TW|zh-CN|en>     语言（默认 zh-TW）
-  -y, --yes                       非互动，只清安全项（Cursor 运行中会跳过）
+  -s, --scope <ide|cli|both>      数据范围（默认 both；TUI 会再询问）
+  -y, --yes                       非互动，只清安全项（对应 scope 进程中会跳过）
       --scan                      只扫描占用
+      --uninstall-run             完整卸载（管理员／内部用）
       --no-pause                  结束不暂停
   -h, --help                      帮助
   -V, --version                   版本
 
-无参数：TUI 互动（鼠标 + 键盘）— 清理 / 备份 / 恢复／删除备份
---scan / --yes：CLI 纯文字输出
+无参数：TUI 互动 — 清理／备份／恢复／完整卸载
+--scan / --yes：纯文字输出（可用 --scope）
 备份位置：与程序同目录的 backups\\\\
 "
         .into(),
@@ -315,19 +410,22 @@ cursor-cleanup  —  Cursor clean / backup tool
 
 Usage:
   cursor-cleanup.exe
-  cursor-cleanup.exe --scan
+  cursor-cleanup.exe --scan --scope ide
+  cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang zh-TW
 
 Options:
   -l, --lang <zh-TW|zh-CN|en>     Language (default zh-TW)
-  -y, --yes                       Non-interactive, safe items only (skips if Cursor running)
+  -s, --scope <ide|cli|both>      Data scope (default both; TUI asks again)
+  -y, --yes                       Non-interactive, safe items only (skips if scope processes running)
       --scan                      Scan sizes only
+      --uninstall-run             Full uninstall (admin / internal)
       --no-pause                  Do not pause on exit
   -h, --help                      Help
   -V, --version                   Version
 
-No args: TUI (mouse + keyboard) — Clean / Backup / Restore-or-delete
---scan / --yes: CLI stdout mode
+No args: TUI — Clean / Backup / Restore / Full uninstall
+--scan / --yes: stdout mode (supports --scope)
 Backups: backups\\\\ next to the executable
 "
         .into(),

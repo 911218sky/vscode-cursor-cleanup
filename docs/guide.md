@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.4.4** (Cursor-only; confirm before force-quit / restore)
+Version: **v0.5.0** (Cursor-only; full uninstall + confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -36,13 +36,14 @@ Same mission, but **Cursor-only**: safe tiered cleanup without touching project 
    - **Clean** — caches / history / state.vscdb
    - **Backup** — config only, or config + `state.vscdb` (recommended)
    - **Restore / delete** — restore one backup, or multi-select delete under `backups/`
+   - **Fully uninstall** — official Uninstall.exe (Windows, may request UAC) then wipe leftovers / CLI
 7. For Clean, choose a plan:
    - **Conservative** — safe caches only
    - **Standard** — safe + edit history
    - **Deep** — includes `state.vscdb`
    - **Custom** — confirm each item
 8. Optionally return to the main menu or exit
-9. Press **Enter** to close
+9. Full uninstall removes `%APPDATA%\Cursor`, `%USERPROFILE%\.cursor`, `%LOCALAPPDATA%\cursor-agent`, etc. Project-local `.cursor/` folders are **not** deleted.
 
 UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plain stdout. Cleanup/backup logic uses the Rust standard library.
 
@@ -60,17 +61,19 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 
 ```powershell
 .\cursor-cleanup.exe
-.\cursor-cleanup.exe --lang en --scan
-.\cursor-cleanup.exe --yes
+.\cursor-cleanup.exe --lang en --scan --scope ide
+.\cursor-cleanup.exe --scan --scope cli
+.\cursor-cleanup.exe --yes --scope both
 .\cursor-cleanup.exe --help
 ```
 
 | Flag | Meaning |
 |------|---------|
-| (none) | Full interactive menu |
+| (none) | Full interactive menu (asks IDE / CLI / Both before clean or backup) |
 | `--lang zh-TW\|zh-CN\|en` | UI language (default `zh-TW`) |
+| `--scope ide\|cli\|both` | Data scope for `--scan` / `--yes` (default `both`) |
 | `--scan` | Scan sizes only |
-| `--yes` | Non-interactive, safe items only (skips if Cursor is running) |
+| `--yes` | Non-interactive, safe items only (skips if scope processes are running) |
 | `--no-pause` | Do not pause on exit |
 
 ## What gets cleaned?
@@ -78,18 +81,23 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 | Risk | Item | Notes |
 |------|------|-------|
 | Safe | CachedData, extension VSIX cache, GPU/Cache, logs | Rebuilds automatically; recommended daily |
+| Safe | Agent CLI caches (`~/.cursor/statsig-cache.json`, `ai-tracking`) | Does not remove the CLI install |
 | Medium | User/History | Local undo history; does not affect Git |
+| Medium | Agent CLI state / chats / projects (`~/.cursor/agent-cli-state.json`, `chats`, `projects`) | CLI conversation / project state |
 | High | state.vscdb | AI chats, recent files, UI state |
+| High | Agent CLI `auth.json` | Logs out `agent` CLI |
 
-**Never deletes** project source code or installed extension binaries.
+**Never deletes** project source code, installed extension binaries, or `%LOCALAPPDATA%\cursor-agent` (CLI install).
+
+Force-quit also stops Agent CLI processes (`agent` / `cursor-agent`). Full backup (config + state) also copies `auth.json`.
 
 ## Data paths
 
-| Platform | Cursor |
-|----------|--------|
-| Windows | `%APPDATA%\Cursor` |
-| macOS | `~/Library/Application Support/Cursor` |
-| Linux | `~/.config/Cursor` |
+| Platform | Cursor IDE | Agent CLI home |
+|----------|------------|----------------|
+| Windows | `%APPDATA%\Cursor` | `%USERPROFILE%\.cursor` |
+| macOS | `~/Library/Application Support/Cursor` | `~/.cursor` |
+| Linux | `~/.config/Cursor` | `~/.cursor` |
 
 ## Recommendations
 
@@ -97,7 +105,7 @@ UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plai
 2. Prefer **Conservative** for routine use
 3. Only use **Deep** when `state.vscdb` is huge (e.g. > 1GB) and the app feels slow — backup first
 
-Note: Deep clean removes the entire `state.vscdb`. It cannot selectively purge only archived AI chats while keeping the chat list. Prefer Cursor’s built-in **Delete Old Chats** / **GC Agent KV Blobs** for that.
+Note: Deep clean removes the entire `state.vscdb` and Agent CLI `auth.json`. It cannot selectively purge only archived AI chats while keeping the chat list. Prefer Cursor’s built-in **Delete Old Chats** / **GC Agent KV Blobs** for that.
 
 ## Build from source
 

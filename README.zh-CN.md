@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.4.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-brightgreen.svg)
 
 **双击即可用的互动清理工具** · 也支持 CLI  
 默认界面语言：**繁体中文**；可选简体 / English
@@ -54,32 +54,42 @@
 2. 下载 **`cursor-cleanup.exe`**（或 zip 再解压）
 3. **双击 `cursor-cleanup.exe`**
 4. 先选语言 → ↑↓ + Enter（可「← 返回」）
-5. 结束后按 **Enter** 关闭窗口
+5. 主菜单含：**清理**／**备份**／**恢复**／**完整卸载**／退出
 
 ## CLI
 
 ```powershell
 cursor-cleanup.exe --lang zh-CN
-cursor-cleanup.exe --lang zh-CN --scan
-cursor-cleanup.exe --yes
+cursor-cleanup.exe --scan --scope ide
+cursor-cleanup.exe --scan --scope cli
+cursor-cleanup.exe --yes --scope both
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `--lang zh-TW\|zh-CN\|en` | 语言（默认 `zh-TW`） |
+| `--scope ide\|cli\|both` | 数据范围（默认 `both`） |
 | `--scan` | 只扫描 |
-| `--yes` | 自动清安全项（Cursor 运行中会跳过） |
+| `--yes` | 自动清安全项（对应 scope 进程中会跳过） |
 | `--no-pause` | 结束不暂停 |
+
+### 完整卸载（TUI）
+
+主菜单 → **完整卸载 Cursor / CLI**（需再确认）。Windows 会请求管理员（UAC），先启动官方 `Uninstall.exe`，结束后再清除 `%APPDATA%\Cursor`、`%USERPROFILE%\.cursor`、`%LOCALAPPDATA%\cursor-agent` 等残留。**不删**各项目目录内的 `.cursor/`。
+
+TUI 清理／备份前会先选：**Cursor IDE**、**Agent CLI**、或**两者**。
 
 ## 清什么？
 
 | 风险 | 内容 |
 |------|------|
-| 安全 | CachedData、扩展缓存、GPU/Cache、logs |
-| 中等 | 本地编辑历史 History |
-| 高危 | `state.vscdb`（AI 聊天／最近文件／UI） |
+| 安全 | CachedData、扩展缓存、GPU/Cache、logs、**Agent CLI 缓存**（`~/.cursor`） |
+| 中等 | 本地编辑历史 History、**Agent CLI 状态 / chats / projects** |
+| 高危 | `state.vscdb`（AI 聊天／最近文件／UI）、**Agent CLI 登录 `auth.json`** |
 
-不删：项目代码、已装扩展本体。
+一般「清理」不删：项目代码、已装扩展本体、Agent CLI 安装目录。**完整卸载**会移除安装与用户数据（见上）。
+
+强制关闭只结束所选范围进程；完整「两者」备份含 `auth.json`。
 
 ## 文档
 

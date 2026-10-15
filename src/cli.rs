@@ -1,9 +1,11 @@
 //! Plain stdout output for `--scan` / `--yes` CLI mode (non-TUI).
 
-use crate::cleanup::{collect_stats, is_editor_running, run_target, sum_target_sizes, TargetStat};
+use crate::cleanup::{
+    collect_stats_for, is_scope_running, run_target, sum_target_sizes, TargetStat,
+};
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Msg};
-use crate::paths::{Editor, Risk};
+use crate::paths::{DataScope, Editor, Risk};
 use std::io::{self, Write};
 use unicode_width::UnicodeWidthStr;
 
@@ -111,27 +113,79 @@ pub fn pause_exit() {
     println!();
     print!("  {} ", ansi::bright_black(t(Msg::PauseExit)));
     let _ = io::stdout().flush();
-    let mut s = String::new();
-    let _ = io::stdin().read_line(&mut s);
+    wait_for_dismiss_key();
 }
 
-pub fn pause_menu() {
+/// Wait for Enter / Esc / q. Uses a short raw-mode key read so this still works
+/// after a prior crossterm TUI session (cooked `stdin().read_line` can hang on Windows).
+fn wait_for_dismiss_key() {
+    use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+    use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    use std::io::IsTerminal;
+    use std::time::Duration;
+
+    if !io::stdin().is_terminal() {
+        return;
+    }
+
+    if enable_raw_mode().is_err() {
+        let mut s = String::new();
+        let _ = io::stdin().read_line(&mut s);
+        return;
+    }
+
+    // Drop leftover Press/Release / mouse events from a previous session.
+    while event::poll(Duration::ZERO).unwrap_or(false) {
+        let _ = event::read();
+    }
+
+    loop {
+        match event::read() {
+            Ok(Event::Key(KeyEvent { code, kind, .. })) if kind == KeyEventKind::Press => {
+                if matches!(
+                    code,
+                    KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q')
+                ) {
+                    break;
+                }
+            }
+            Ok(_) => {}
+            Err(_) => break,
+        }
+    }
+
+    let _ = disable_raw_mode();
     println!();
-    print!("  {} ", ansi::bright_black(t(Msg::PressEnterMenu)));
-    let _ = io::stdout().flush();
-    let mut s = String::new();
-    let _ = io::stdin().read_line(&mut s);
 }
 
-pub fn print_scan(editor: Editor, root: &std::path::Path, total: u64, stats: &[TargetStat]) {
+pub fn print_scan(
+    editor: Editor,
+    scope: DataScope,
+    root: &std::path::Path,
+    total: u64,
+    stats: &[TargetStat],
+) {
     println!();
-    let title = format!("── {} ", editor.display_name());
+    let title = format!(
+        "── {} [{}] ",
+        editor.display_name(),
+        i18n::scope_short(scope)
+    );
     let fill = 40usize.saturating_sub(title.width());
     println!(
         "  {}",
         ansi::bright_magenta_bold(&format!("{title}{}", "─".repeat(fill)))
     );
     println!("  {}", ansi::dim(&root.display().to_string()));
+    if scope.includes_cli() {
+        if let Some(home) = editor.cursor_home() {
+            println!(
+                "  {} {}",
+                ansi::dim("CLI:"),
+                ansi::dim(&home.display().to_string())
+            );
+        }
+    }
     println!(
         "  {}  {}",
         ansi::dim(t(Msg::TotalSize)),
@@ -172,23 +226,27 @@ fn idx_risk(stats: &[TargetStat], pred: impl Fn(Risk) -> bool) -> Vec<usize> {
         .collect()
 }
 
-/// Non-interactive clean (`--yes`): safe items only, skips if editor is running.
+/// Non-interactive clean (`--yes`): safe items only, skips if processes for
+/// the chosen scope are running.
 /// Returns `true` only when clean ran without per-target errors.
-pub fn run_yes_clean(editor: Editor) -> bool {
-    let Some((root, total, stats)) = collect_stats(editor) else {
+pub fn run_yes_clean(editor: Editor, scope: DataScope) -> bool {
+    let Some((root, total, stats)) = collect_stats_for(editor, scope) else {
         warn(&i18n::fmt_no_resolve(editor.display_name()));
         return false;
     };
-    if !root.exists() {
+    let root_ok = root.exists()
+        || (scope == DataScope::Cli
+            && editor.data_dir().is_some_and(|p| p.exists()));
+    if !root_ok {
         warn(&i18n::fmt_no_dir(
             editor.display_name(),
             &root.display().to_string(),
         ));
         return false;
     }
-    print_scan(editor, &root, total, &stats);
+    print_scan(editor, scope, &root, total, &stats);
 
-    if is_editor_running(editor) {
+    if is_scope_running(editor, scope) {
         warn(t(Msg::EditorRunningAbort));
         return false;
     }
@@ -206,7 +264,7 @@ pub fn run_yes_clean(editor: Editor) -> bool {
         let title = i18n::target_title(target.kind);
         print!("  {} {} ... ", ansi::cyan("→"), title);
         let _ = io::stdout().flush();
-        let result = run_target(&root, target);
+        let result = run_target(editor, target);
         freed_total += result.freed;
         if result.errors == 0 {
             println!(
@@ -236,7 +294,7 @@ pub fn run_yes_clean(editor: Editor) -> bool {
         }
     }
 
-    let after = sum_target_sizes(&root, &stats);
+    let after = sum_target_sizes(editor, &stats);
     println!();
     println!(
         "  {}",

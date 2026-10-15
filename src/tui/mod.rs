@@ -13,9 +13,12 @@ use terminal::TerminalGuard;
 
 /// Result of an interactive TUI session.
 pub struct TuiOutcome {
-    pub did_work: bool,
     /// User chose Exit / Esc from root screens, or Ctrl+C.
     pub user_quit: bool,
+    /// Leave TUI, then run the full uninstall pipeline on the main console.
+    pub run_uninstall: bool,
+    /// Leave TUI, then UAC-relaunch with `--uninstall-run`.
+    pub elevate_uninstall: bool,
 }
 
 /// Run the full interactive TUI.
@@ -62,7 +65,8 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
     }
 
     Ok(TuiOutcome {
-        did_work: app.did_work,
         user_quit: app.should_quit,
+        run_uninstall: app.run_uninstall,
+        elevate_uninstall: app.elevate_uninstall,
     })
 }

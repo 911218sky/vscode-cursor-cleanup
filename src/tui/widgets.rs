@@ -478,7 +478,8 @@ pub fn mouse_to_index(
 pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
     let defaults: &[&str] = match screen {
         MenuScreen::Language => &["繁", "简", "En"],
-        MenuScreen::MainMenu => &["—", "·", "↺", "×"],
+        MenuScreen::MainMenu => &["—", "·", "↺", "⚠", "×"],
+        MenuScreen::PickScope => &["◇", "◆", "◎", "←"],
         MenuScreen::Plan => &["·", "—", "═", "…", "←"],
         MenuScreen::CustomClean => &["✓", "→", "←"],
         MenuScreen::BackupMode => &["·", "—", "←"],
@@ -494,6 +495,7 @@ pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
 pub enum MenuScreen {
     Language,
     MainMenu,
+    PickScope,
     Plan,
     CustomClean,
     BackupMode,

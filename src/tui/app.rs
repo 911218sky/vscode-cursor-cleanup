@@ -7,6 +7,7 @@ use crate::cursor_version;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
 use crate::paths::{plan_target_indices, Editor, Risk};
+use crate::uninstall;
 use crate::tui::widgets::{
     checkbox_items, draw_banner, draw_confirm, draw_input_field, draw_progress, draw_scan_table,
     draw_scanning, icons_for_screen, list_items, menu_list, mouse_to_index, status_line,
@@ -22,6 +23,8 @@ use ratatui::Frame;
 use std::path::PathBuf;
 use tui_input::Input;
 use tui_input::InputRequest;
+
+const MAIN_MENU_LEN: usize = 5;
 
 #[derive(Clone)]
 pub enum StatusMsg {
@@ -68,6 +71,8 @@ enum ConfirmAction {
         editor: Editor,
         then: Box<PendingWork>,
     },
+    /// Full wipe of Cursor IDE + Agent CLI (install + leftovers).
+    Uninstall,
 }
 
 #[derive(Clone)]
@@ -141,6 +146,10 @@ pub struct App {
     status: StatusMsg,
     pub should_quit: bool,
     pub did_work: bool,
+    /// Leave TUI and run the uninstall pipeline on the main console.
+    pub run_uninstall: bool,
+    /// Leave TUI and UAC-relaunch with `--uninstall-run` (Windows).
+    pub elevate_uninstall: bool,
     /// Set when the user confirmed force-quit; relaunch Cursor after successful work.
     relaunch_after: bool,
     list_hit_area: Rect,
@@ -163,6 +172,8 @@ impl App {
             status: StatusMsg::None,
             should_quit: false,
             did_work: false,
+            run_uninstall: false,
+            elevate_uninstall: false,
             relaunch_after: false,
             list_hit_area: Rect::default(),
             frame: 0,
@@ -236,7 +247,7 @@ impl App {
             self.status = StatusMsg::Warn(i18n::fmt_no_resolve(editor.display_name()));
         }
         self.screen = Screen::MainMenu;
-        self.reset_list(4);
+        self.reset_list(MAIN_MENU_LEN);
     }
 
     fn tick_progress(&mut self) {
@@ -260,9 +271,9 @@ impl App {
 
         if !summary_done {
             if step < selected_len {
-                let (root, target, title, freed_total, any_errors) = {
+                let (editor, target, title, freed_total, any_errors) = {
                     let Screen::Progress {
-                        root,
+                        editor,
                         stats,
                         selected,
                         freed_total,
@@ -275,9 +286,9 @@ impl App {
                     let idx = selected[step];
                     let target = stats[idx].target.clone();
                     let title = i18n::target_title(target.kind);
-                    (root.clone(), target, title, *freed_total, *any_errors)
+                    (*editor, target, title, *freed_total, *any_errors)
                 };
-                let result = run_target(&root, &target);
+                let result = run_target(editor, &target);
                 let new_freed = freed_total + result.freed;
                 let step_err = result.errors > 0;
                 let line = if !step_err {
@@ -307,7 +318,6 @@ impl App {
                 let (editor, total, freed_total, any_errors, after) = {
                     let Screen::Progress {
                         editor,
-                        root,
                         total,
                         stats,
                         freed_total,
@@ -317,7 +327,7 @@ impl App {
                     else {
                         return;
                     };
-                    let after = sum_target_sizes(root, stats);
+                    let after = sum_target_sizes(*editor, stats);
                     (*editor, *total, *freed_total, *any_errors, after)
                 };
                 let summary = i18n::fmt_summary(
@@ -356,7 +366,7 @@ impl App {
                 self.relaunch_after = false;
             }
             self.screen = Screen::MainMenu;
-            self.reset_list(4);
+            self.reset_list(MAIN_MENU_LEN);
         }
     }
 
@@ -496,6 +506,7 @@ impl App {
                 t(Msg::MenuClean).to_string(),
                 t(Msg::MenuBackup).to_string(),
                 t(Msg::MenuRestore).to_string(),
+                t(Msg::MenuUninstall).to_string(),
                 t(Msg::Exit).to_string(),
             ],
             Screen::ScanAndPlan { plan_labels, .. } => plan_labels.clone(),
@@ -645,7 +656,7 @@ impl App {
             self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::RestoreEditorRunning).to_string());
             self.screen = Screen::MainMenu;
-            self.reset_list(4);
+            self.reset_list(MAIN_MENU_LEN);
             return;
         }
         match backup::restore_backup(&info) {
@@ -658,7 +669,7 @@ impl App {
                 ));
                 self.maybe_relaunch();
                 self.screen = Screen::MainMenu;
-                self.reset_list(4);
+                self.reset_list(MAIN_MENU_LEN);
             }
             Err(e) => {
                 self.relaunch_after = false;
@@ -676,7 +687,7 @@ impl App {
                 };
                 self.status = StatusMsg::Warn(msg);
                 self.screen = Screen::MainMenu;
-                self.reset_list(4);
+                self.reset_list(MAIN_MENU_LEN);
             }
         }
     }
@@ -720,7 +731,7 @@ impl App {
             }
         }
         self.screen = Screen::MainMenu;
-        self.reset_list(4);
+        self.reset_list(MAIN_MENU_LEN);
     }
 
     fn start_clean(&mut self) {
@@ -728,6 +739,16 @@ impl App {
             editor: Editor::Cursor,
         };
         self.scan_at = self.frame + 6;
+    }
+
+    fn confirm_uninstall(&mut self) {
+        let return_to = Box::new(self.screen.clone());
+        self.screen = Screen::Confirm {
+            prompt: t(Msg::ConfirmUninstall).to_string(),
+            action: ConfirmAction::Uninstall,
+            return_to,
+        };
+        self.reset_list(2);
     }
 
     /// 0=conservative, 1=standard (safe+history), 2=deep, 3=custom → None
@@ -741,7 +762,7 @@ impl App {
         if backups.is_empty() {
             self.status = StatusMsg::Warn(t(Msg::NoBackups).to_string());
             self.screen = Screen::MainMenu;
-            self.reset_list(4);
+            self.reset_list(MAIN_MENU_LEN);
         } else {
             self.screen = Screen::RestoreManage { backups };
             self.reset_list(3);
@@ -761,7 +782,7 @@ impl App {
             self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::DataStillLocked).to_string());
             self.screen = Screen::MainMenu;
-            self.reset_list(4);
+            self.reset_list(MAIN_MENU_LEN);
             return;
         }
         self.screen = Screen::Progress {
@@ -802,7 +823,7 @@ impl App {
                 };
                 i18n::set_lang(lang);
                 self.screen = Screen::MainMenu;
-                self.reset_list(4);
+                self.reset_list(MAIN_MENU_LEN);
             }
             Screen::MainMenu => match idx {
                 0 => self.start_clean(),
@@ -811,6 +832,7 @@ impl App {
                     self.reset_list(3);
                 }
                 2 => self.open_restore_manage(),
+                3 => self.confirm_uninstall(),
                 _ => self.should_quit = true,
             },
             Screen::ScanAndPlan {
@@ -827,7 +849,7 @@ impl App {
                 // Labels: 0 conservative, 1 standard, 2 deep, 3 custom, 4 back
                 if idx == 4 {
                     self.screen = Screen::MainMenu;
-                    self.reset_list(4);
+                    self.reset_list(MAIN_MENU_LEN);
                     return;
                 }
                 if idx == 3 {
@@ -846,7 +868,7 @@ impl App {
                 if let Some(sel) = self.plan_indices(idx, &stats) {
                     if sel.is_empty() {
                         self.screen = Screen::MainMenu;
-                        self.reset_list(4);
+                        self.reset_list(MAIN_MENU_LEN);
                     } else {
                         self.begin_clean(editor, root, total, stats, sel);
                     }
@@ -913,7 +935,7 @@ impl App {
             Screen::BackupMode => {
                 if idx == 2 {
                     self.screen = Screen::MainMenu;
-                    self.reset_list(4);
+                    self.reset_list(MAIN_MENU_LEN);
                     return;
                 }
                 let include_state = idx == 1;
@@ -936,7 +958,7 @@ impl App {
                     }
                     _ => {
                         self.screen = Screen::MainMenu;
-                        self.reset_list(4);
+                        self.reset_list(MAIN_MENU_LEN);
                     }
                 }
             }
@@ -1028,7 +1050,7 @@ impl App {
                             }
                         }
                         self.screen = Screen::MainMenu;
-                        self.reset_list(4);
+                        self.reset_list(MAIN_MENU_LEN);
                     }
                     ConfirmAction::Clean {
                         editor,
@@ -1048,6 +1070,18 @@ impl App {
                             then,
                             return_to,
                         };
+                    }
+                    ConfirmAction::Uninstall => {
+                        self.relaunch_after = false;
+                        // Official Uninstall.exe needs a normal console + possible UAC.
+                        #[cfg(windows)]
+                        if !uninstall::is_process_elevated() {
+                            self.elevate_uninstall = true;
+                            self.should_quit = true;
+                            return;
+                        }
+                        self.run_uninstall = true;
+                        self.should_quit = true;
                     }
                 }
             }

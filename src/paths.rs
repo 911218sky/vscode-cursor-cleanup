@@ -5,6 +5,58 @@ pub enum Editor {
     Cursor,
 }
 
+/// Which on-disk tree a cleanup target lives under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataRoot {
+    /// Cursor IDE app data (`%APPDATA%/Cursor`, …).
+    Ide,
+    /// Cursor / Agent CLI home (`~/.cursor`).
+    CursorHome,
+}
+
+/// User-facing scope: IDE data, Agent CLI data, or both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataScope {
+    Ide,
+    Cli,
+    Both,
+}
+
+impl DataScope {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "ide" | "editor" | "app" => Some(Self::Ide),
+            "cli" | "agent" | "agent-cli" => Some(Self::Cli),
+            "both" | "all" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    pub fn includes_ide(self) -> bool {
+        matches!(self, Self::Ide | Self::Both)
+    }
+
+    pub fn includes_cli(self) -> bool {
+        matches!(self, Self::Cli | Self::Both)
+    }
+
+    /// Filter by logical product, not only `DataRoot`
+    /// (`auth.json` lives under the IDE data dir but belongs to CLI).
+    pub fn includes_kind(self, kind: TargetKind) -> bool {
+        match kind {
+            TargetKind::CachedData
+            | TargetKind::ExtVsix
+            | TargetKind::Gpu
+            | TargetKind::Logs
+            | TargetKind::History
+            | TargetKind::State => self.includes_ide(),
+            TargetKind::AgentCliCache
+            | TargetKind::AgentCliState
+            | TargetKind::AgentCliAuth => self.includes_cli(),
+        }
+    }
+}
+
 impl Editor {
     pub fn display_name(self) -> &'static str {
         "Cursor"
@@ -15,36 +67,64 @@ impl Editor {
     }
 
     /// Process names for Unix detect/kill. Windows uses `windows_images` instead.
+    /// Includes Agent CLI (`agent` / `cursor-agent`).
     #[cfg(not(windows))]
     pub fn process_names(self) -> &'static [&'static str] {
         let _ = self;
-        &["Cursor", "cursor"]
+        &["Cursor", "cursor", "agent", "cursor-agent"]
     }
 
     pub fn data_dir(self) -> Option<PathBuf> {
+        self.data_root(DataRoot::Ide)
+    }
+
+    /// `~/.cursor` — Agent CLI state / caches (shared with newer Cursor layouts).
+    pub fn cursor_home(self) -> Option<PathBuf> {
+        self.data_root(DataRoot::CursorHome)
+    }
+
+    pub fn data_root(self, root: DataRoot) -> Option<PathBuf> {
         let _ = self;
-        #[cfg(windows)]
-        {
-            let base = std::env::var_os("APPDATA").map(PathBuf::from)?;
-            Some(base.join("Cursor"))
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let home = std::env::var_os("HOME").map(PathBuf::from)?;
-            let support = home.join("Library").join("Application Support");
-            Some(support.join("Cursor"))
-        }
-        #[cfg(all(unix, not(target_os = "macos")))]
-        {
-            let home = std::env::var_os("HOME").map(PathBuf::from)?;
-            let base = std::env::var_os("XDG_CONFIG_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home.join(".config"));
-            Some(base.join("Cursor"))
-        }
-        #[cfg(not(any(windows, unix)))]
-        {
-            None
+        match root {
+            DataRoot::Ide => {
+                #[cfg(windows)]
+                {
+                    let base = std::env::var_os("APPDATA").map(PathBuf::from)?;
+                    Some(base.join("Cursor"))
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+                    let support = home.join("Library").join("Application Support");
+                    Some(support.join("Cursor"))
+                }
+                #[cfg(all(unix, not(target_os = "macos")))]
+                {
+                    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+                    let base = std::env::var_os("XDG_CONFIG_HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| home.join(".config"));
+                    Some(base.join("Cursor"))
+                }
+                #[cfg(not(any(windows, unix)))]
+                {
+                    None
+                }
+            }
+            DataRoot::CursorHome => {
+                #[cfg(windows)]
+                {
+                    let home = std::env::var_os("USERPROFILE")
+                        .or_else(|| std::env::var_os("HOME"))
+                        .map(PathBuf::from)?;
+                    Some(home.join(".cursor"))
+                }
+                #[cfg(not(windows))]
+                {
+                    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+                    Some(home.join(".cursor"))
+                }
+            }
         }
     }
 }
@@ -63,31 +143,46 @@ pub enum TargetKind {
     Gpu,
     Logs,
     History,
+    /// Agent CLI caches under `~/.cursor` (not the CLI install itself).
+    AgentCliCache,
+    /// Agent CLI local state / chat folders under `~/.cursor`.
+    AgentCliState,
     State,
+    /// Agent CLI login file (`auth.json`) next to IDE data.
+    AgentCliAuth,
 }
 
 #[derive(Debug, Clone)]
 pub struct CleanTarget {
     pub kind: TargetKind,
     pub risk: Risk,
+    pub root: DataRoot,
     pub rel_paths: &'static [&'static str],
 }
 
+#[allow(dead_code)]
 pub fn clean_targets() -> Vec<CleanTarget> {
-    vec![
+    clean_targets_for(DataScope::Both)
+}
+
+pub fn clean_targets_for(scope: DataScope) -> Vec<CleanTarget> {
+    let all = [
         CleanTarget {
             kind: TargetKind::CachedData,
             risk: Risk::Safe,
+            root: DataRoot::Ide,
             rel_paths: &["CachedData"],
         },
         CleanTarget {
             kind: TargetKind::ExtVsix,
             risk: Risk::Safe,
+            root: DataRoot::Ide,
             rel_paths: &["CachedExtensionVSIXs"],
         },
         CleanTarget {
             kind: TargetKind::Gpu,
             risk: Risk::Safe,
+            root: DataRoot::Ide,
             rel_paths: &[
                 "GPUCache",
                 "Cache",
@@ -100,23 +195,53 @@ pub fn clean_targets() -> Vec<CleanTarget> {
         CleanTarget {
             kind: TargetKind::Logs,
             risk: Risk::Safe,
+            root: DataRoot::Ide,
             rel_paths: &["logs"],
+        },
+        CleanTarget {
+            kind: TargetKind::AgentCliCache,
+            risk: Risk::Safe,
+            root: DataRoot::CursorHome,
+            rel_paths: &["statsig-cache.json", "ai-tracking"],
         },
         CleanTarget {
             kind: TargetKind::History,
             risk: Risk::Medium,
+            root: DataRoot::Ide,
             rel_paths: &["User/History"],
+        },
+        CleanTarget {
+            kind: TargetKind::AgentCliState,
+            risk: Risk::Medium,
+            root: DataRoot::CursorHome,
+            // Keep extensions / plugins / skills / cli-config — only CLI runtime state.
+            rel_paths: &["agent-cli-state.json", "chats", "projects"],
         },
         CleanTarget {
             kind: TargetKind::State,
             risk: Risk::High,
+            root: DataRoot::Ide,
             rel_paths: &[
                 "User/globalStorage/state.vscdb",
                 "User/globalStorage/state.vscdb-wal",
                 "User/globalStorage/state.vscdb-shm",
             ],
         },
-    ]
+        CleanTarget {
+            kind: TargetKind::AgentCliAuth,
+            risk: Risk::High,
+            root: DataRoot::Ide,
+            rel_paths: &["auth.json", "auth.json.bak"],
+        },
+    ];
+    all.into_iter()
+        .filter(|t| scope.includes_kind(t.kind))
+        .collect()
+}
+
+/// Relative paths under IDE data dir for Agent CLI login (backup / restore).
+pub fn agent_cli_auth_rel_paths() -> &'static [&'static str] {
+    &["auth.json", "auth.json.bak"]
 }
 
 /// Plan menu choice → target indices by risk.
@@ -252,6 +377,40 @@ mod tests {
         let deep = plan_target_indices(2, &risks).unwrap();
         assert!(deep.iter().any(|&i| matches!(risks[i], Risk::High)));
         assert!(plan_target_indices(3, &risks).is_none());
+    }
+
+    #[test]
+    fn scope_filters_kinds() {
+        let ide = clean_targets_for(DataScope::Ide);
+        assert!(ide.iter().all(|t| DataScope::Ide.includes_kind(t.kind)));
+        assert!(ide
+            .iter()
+            .any(|t| matches!(t.kind, TargetKind::State)));
+        assert!(!ide
+            .iter()
+            .any(|t| matches!(t.kind, TargetKind::AgentCliAuth)));
+
+        let cli = clean_targets_for(DataScope::Cli);
+        assert!(cli.iter().all(|t| DataScope::Cli.includes_kind(t.kind)));
+        assert!(cli
+            .iter()
+            .any(|t| matches!(t.kind, TargetKind::AgentCliAuth)));
+        assert!(!cli
+            .iter()
+            .any(|t| matches!(t.kind, TargetKind::State)));
+
+        assert_eq!(
+            clean_targets_for(DataScope::Both).len(),
+            clean_targets().len()
+        );
+    }
+
+    #[test]
+    fn scope_parse() {
+        assert_eq!(DataScope::parse("ide"), Some(DataScope::Ide));
+        assert_eq!(DataScope::parse("CLI"), Some(DataScope::Cli));
+        assert_eq!(DataScope::parse("both"), Some(DataScope::Both));
+        assert_eq!(DataScope::parse("nope"), None);
     }
 
     #[test]
