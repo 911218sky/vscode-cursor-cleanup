@@ -1,4 +1,4 @@
-//! Full uninstall of Cursor IDE + Agent CLI (install + known leftovers).
+//! Full uninstall of Cursor IDE and/or Agent CLI (install + known leftovers).
 //! Does **not** touch project-local `.cursor/` folders.
 
 use crate::cleanup::force_quit_scope;
@@ -43,6 +43,19 @@ pub fn is_process_elevated() -> bool {
     }
 }
 
+/// IDE uninstall (official Uninstall.exe / Program Files) needs elevation on Windows.
+pub fn needs_elevation(scope: DataScope) -> bool {
+    #[cfg(windows)]
+    {
+        scope.includes_ide() && !is_process_elevated()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = scope;
+        false
+    }
+}
+
 #[cfg(windows)]
 fn powershell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
@@ -50,15 +63,24 @@ fn powershell_quote(s: &str) -> String {
 
 /// Relaunch this executable elevated with `--uninstall-run` (Windows UAC).
 /// Returns true if the elevated process was started (and waited for).
-pub fn relaunch_elevated_uninstall() -> bool {
+pub fn relaunch_elevated_uninstall(scope: DataScope) -> bool {
     #[cfg(windows)]
     {
         let Ok(exe) = std::env::current_exe() else {
             return false;
         };
         let lang = i18n::lang().code();
+        let scope_arg = match scope {
+            DataScope::Ide => "ide",
+            DataScope::Cli => "cli",
+            DataScope::Both => "both",
+        };
         let file = powershell_quote(&exe.display().to_string());
-        let arg_list = format!("'--uninstall-run','--lang','{}'", lang.replace('\'', "''"));
+        let arg_list = format!(
+            "'--uninstall-run','--scope','{}','--lang','{}'",
+            scope_arg,
+            lang.replace('\'', "''")
+        );
         let cmd = format!(
             "Start-Process -FilePath {file} -ArgumentList {arg_list} -Verb RunAs -Wait"
         );
@@ -70,6 +92,7 @@ pub fn relaunch_elevated_uninstall() -> bool {
     }
     #[cfg(not(windows))]
     {
+        let _ = scope;
         false
     }
 }
@@ -150,38 +173,70 @@ fn push_if_exists(out: &mut Vec<PathBuf>, p: PathBuf) {
     }
 }
 
-/// Known leftover / install paths that still exist on disk.
-pub fn leftover_paths() -> Vec<PathBuf> {
-    let mut out = Vec::new();
+fn dedupe_paths(mut out: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = Vec::new();
+    out.retain(|p| {
+        if seen.iter().any(|s: &PathBuf| s == p) {
+            false
+        } else {
+            seen.push(p.clone());
+            true
+        }
+    });
+    out
+}
 
+fn push_cli_leftovers(out: &mut Vec<PathBuf>) {
+    #[cfg(windows)]
+    {
+        if let Some(home) = std::env::var_os("USERPROFILE")
+            .or_else(|| std::env::var_os("HOME"))
+            .map(PathBuf::from)
+        {
+            push_if_exists(out, home.join(".cursor"));
+            push_if_exists(out, home.join(".cursor-tutor"));
+            push_if_exists(out, home.join(".cursor.json"));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            push_if_exists(out, local.join("cursor-agent"));
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            push_if_exists(out, home.join(".cursor"));
+            push_if_exists(out, home.join(".cursor-tutor"));
+            push_if_exists(out, home.join(".cursor.json"));
+        }
+    }
+}
+
+fn push_ide_leftovers(out: &mut Vec<PathBuf>) {
     #[cfg(windows)]
     {
         if let Some(roaming) = std::env::var_os("APPDATA").map(PathBuf::from) {
-            push_if_exists(&mut out, roaming.join("Cursor"));
+            push_if_exists(out, roaming.join("Cursor"));
             let sm = roaming
                 .join("Microsoft")
                 .join("Windows")
                 .join("Start Menu")
                 .join("Programs");
-            collect_start_menu_cursor(&sm, &mut out);
-        }
-        if let Some(home) = std::env::var_os("USERPROFILE")
-            .or_else(|| std::env::var_os("HOME"))
-            .map(PathBuf::from)
-        {
-            push_if_exists(&mut out, home.join(".cursor"));
-            push_if_exists(&mut out, home.join(".cursor-tutor"));
-            push_if_exists(&mut out, home.join(".cursor.json"));
+            collect_start_menu_cursor(&sm, out);
         }
         if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
-            push_if_exists(&mut out, local.join("cursor-updater"));
-            push_if_exists(&mut out, local.join("cursor-agent"));
+            push_if_exists(out, local.join("cursor-updater"));
             if let Ok(entries) = std::fs::read_dir(&local) {
                 for ent in entries.flatten() {
                     let name = ent.file_name();
                     let n = name.to_string_lossy();
-                    if n.to_ascii_lowercase().starts_with("cursor") {
-                        push_if_exists(&mut out, ent.path());
+                    let lower = n.to_ascii_lowercase();
+                    // CLI install lives here — skip when wiping IDE only.
+                    if lower == "cursor-agent" {
+                        continue;
+                    }
+                    if lower.starts_with("cursor") {
+                        push_if_exists(out, ent.path());
                     }
                 }
             }
@@ -191,7 +246,7 @@ pub fn leftover_paths() -> Vec<PathBuf> {
                     let name = ent.file_name();
                     let n = name.to_string_lossy();
                     if n.to_ascii_lowercase().starts_with("cursor") {
-                        push_if_exists(&mut out, ent.path());
+                        push_if_exists(out, ent.path());
                     }
                 }
             }
@@ -200,22 +255,22 @@ pub fn leftover_paths() -> Vec<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        push_if_exists(&mut out, PathBuf::from("/Applications/Cursor.app"));
+        push_if_exists(out, PathBuf::from("/Applications/Cursor.app"));
         if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
             let support = home.join("Library").join("Application Support");
-            push_if_exists(&mut out, support.join("Cursor"));
-            push_if_exists(&mut out, support.join("Caches").join("cursor-updater"));
+            push_if_exists(out, support.join("Cursor"));
+            push_if_exists(out, support.join("Caches").join("cursor-updater"));
             let caches = home.join("Library").join("Caches");
             let td = "com.todesktop.230313mzl4w4u92";
-            push_if_exists(&mut out, caches.join(td));
-            push_if_exists(&mut out, caches.join(format!("{td}.ShipIt")));
+            push_if_exists(out, caches.join(td));
+            push_if_exists(out, caches.join(format!("{td}.ShipIt")));
             push_if_exists(
-                &mut out,
+                out,
                 home.join("Library").join("HTTPStorages").join(td),
             );
-            push_if_exists(&mut out, home.join("Library").join("Logs").join("Cursor"));
+            push_if_exists(out, home.join("Library").join("Logs").join("Cursor"));
             push_if_exists(
-                &mut out,
+                out,
                 home.join("Library")
                     .join("Preferences")
                     .join(format!("{td}.plist")),
@@ -226,12 +281,12 @@ pub fn leftover_paths() -> Vec<PathBuf> {
                     let name = ent.file_name();
                     let n = name.to_string_lossy();
                     if n.starts_with(&format!("{td}.ShipIt")) {
-                        push_if_exists(&mut out, ent.path());
+                        push_if_exists(out, ent.path());
                     }
                 }
             }
             push_if_exists(
-                &mut out,
+                out,
                 home.join("Library")
                     .join("Saved Application State")
                     .join(format!("{td}.savedState")),
@@ -244,13 +299,10 @@ pub fn leftover_paths() -> Vec<PathBuf> {
                     let name = ent.file_name();
                     let n = name.to_string_lossy();
                     if n.contains("230313mzl4w4u92") {
-                        push_if_exists(&mut out, ent.path());
+                        push_if_exists(out, ent.path());
                     }
                 }
             }
-            push_if_exists(&mut out, home.join(".cursor"));
-            push_if_exists(&mut out, home.join(".cursor-tutor"));
-            push_if_exists(&mut out, home.join(".cursor.json"));
         }
     }
 
@@ -260,30 +312,28 @@ pub fn leftover_paths() -> Vec<PathBuf> {
             let config = std::env::var_os("XDG_CONFIG_HOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| home.join(".config"));
-            push_if_exists(&mut out, config.join("Cursor"));
-            push_if_exists(&mut out, home.join(".cursor"));
-            push_if_exists(&mut out, home.join(".cursor-tutor"));
-            push_if_exists(&mut out, home.join(".cursor.json"));
+            push_if_exists(out, config.join("Cursor"));
         }
         for cand in [
             PathBuf::from("/usr/bin/cursor"),
             PathBuf::from("/usr/local/bin/cursor"),
             PathBuf::from("/opt/cursor"),
         ] {
-            push_if_exists(&mut out, cand);
+            push_if_exists(out, cand);
         }
     }
+}
 
-    let mut seen = Vec::new();
-    out.retain(|p| {
-        if seen.iter().any(|s: &PathBuf| s == p) {
-            false
-        } else {
-            seen.push(p.clone());
-            true
-        }
-    });
-    out
+/// Known leftover / install paths that still exist on disk for the given scope.
+pub fn leftover_paths(scope: DataScope) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if scope.includes_ide() {
+        push_ide_leftovers(&mut out);
+    }
+    if scope.includes_cli() {
+        push_cli_leftovers(&mut out);
+    }
+    dedupe_paths(out)
 }
 
 #[cfg(windows)]
@@ -329,17 +379,33 @@ fn clean_cursor_agent_user_path() -> bool {
         .unwrap_or(false)
 }
 
-/// Full uninstall: force-quit → official uninstaller (Windows) → wipe leftovers → PATH.
-pub fn run_full_uninstall(mut progress: impl FnMut(&str)) -> UninstallReport {
+fn uninstall_running_label(scope: DataScope) -> &'static str {
+    match scope {
+        DataScope::Ide => t(Msg::UninstallRunningIde),
+        DataScope::Cli => t(Msg::UninstallRunningCli),
+        DataScope::Both => t(Msg::UninstallRunning),
+    }
+}
+
+fn uninstall_done_label(scope: DataScope) -> &'static str {
+    match scope {
+        DataScope::Ide => t(Msg::UninstallDoneIde),
+        DataScope::Cli => t(Msg::UninstallDoneCli),
+        DataScope::Both => t(Msg::UninstallDone),
+    }
+}
+
+/// Uninstall for `scope`: force-quit → official uninstaller (Windows IDE) → wipe leftovers → PATH.
+pub fn run_full_uninstall(scope: DataScope, mut progress: impl FnMut(&str)) -> UninstallReport {
     let mut report = UninstallReport::default();
 
-    progress(t(Msg::UninstallStepQuit));
-    if !force_quit_scope(Editor::Cursor, DataScope::Both, true) {
+    progress(i18n::force_quitting_label(scope));
+    if !force_quit_scope(Editor::Cursor, scope, true) {
         report.notes.push(t(Msg::ForceQuitFail).to_string());
     }
 
     #[cfg(windows)]
-    {
+    if scope.includes_ide() {
         if let Some(uninst) = find_windows_uninstaller() {
             progress(&format!(
                 "{} — {}",
@@ -375,7 +441,7 @@ pub fn run_full_uninstall(mut progress: impl FnMut(&str)) -> UninstallReport {
     }
 
     progress(t(Msg::UninstallStepLeftovers));
-    for path in leftover_paths() {
+    for path in leftover_paths(scope) {
         let display = path.display().to_string();
         let (freed, _errors) = remove_best_effort(&path);
         if path.exists() {
@@ -388,7 +454,7 @@ pub fn run_full_uninstall(mut progress: impl FnMut(&str)) -> UninstallReport {
     }
 
     #[cfg(windows)]
-    {
+    if scope.includes_cli() {
         progress(t(Msg::UninstallStepPath));
         report.path_cleaned = clean_cursor_agent_user_path();
     }
@@ -397,11 +463,11 @@ pub fn run_full_uninstall(mut progress: impl FnMut(&str)) -> UninstallReport {
 }
 
 /// CLI / elevated entry: print progress to stdout. Returns true when fully successful.
-pub fn run_uninstall_cli() -> bool {
+pub fn run_uninstall_cli(scope: DataScope) -> bool {
     println!();
-    println!("  {}", t(Msg::UninstallRunning));
+    println!("  {}", uninstall_running_label(scope));
     println!();
-    let report = run_full_uninstall(|msg| {
+    let report = run_full_uninstall(scope, |msg| {
         println!("  {msg}");
         let _ = io::stdout().flush();
     });
@@ -433,7 +499,7 @@ pub fn run_uninstall_cli() -> bool {
         println!("  ⚠ {}", t(Msg::UninstallDonePartial));
         false
     } else {
-        println!("  ✔ {}", t(Msg::UninstallDone));
+        println!("  ✔ {}", uninstall_done_label(scope));
         true
     }
 }

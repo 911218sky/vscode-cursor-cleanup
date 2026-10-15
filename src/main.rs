@@ -113,7 +113,7 @@ fn run_tui(skip_lang: bool, pause_on_exit: bool) {
         println!();
         println!("  {}", i18n::t(i18n::Msg::UninstallNeedAdmin));
         let _ = io::stdout().flush();
-        if !uninstall::relaunch_elevated_uninstall() {
+        if !uninstall::relaunch_elevated_uninstall(outcome.uninstall_scope) {
             cli::warn(i18n::t(i18n::Msg::UninstallElevateFail));
             if io::stdin().is_terminal() {
                 cli::pause_exit();
@@ -125,7 +125,7 @@ fn run_tui(skip_lang: bool, pause_on_exit: bool) {
 
     // Leave alternate screen first, then run the official uninstaller + wipe.
     if outcome.run_uninstall {
-        let ok = uninstall::run_uninstall_cli();
+        let ok = uninstall::run_uninstall_cli(outcome.uninstall_scope);
         if io::stdin().is_terminal() {
             cli::pause_exit();
         }
@@ -199,7 +199,7 @@ fn main() {
     let pause_on_exit = !cli.no_pause && interactive;
 
     if cli.uninstall_run {
-        let ok = uninstall::run_uninstall_cli();
+        let ok = uninstall::run_uninstall_cli(cli.scope);
         if !cli.no_pause {
             cli::pause_exit();
         }

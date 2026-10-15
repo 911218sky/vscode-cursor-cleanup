@@ -4,6 +4,7 @@ mod theme;
 mod widgets;
 
 use app::App;
+use crate::paths::DataScope;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -15,10 +16,12 @@ use terminal::TerminalGuard;
 pub struct TuiOutcome {
     /// User chose Exit / Esc from root screens, or Ctrl+C.
     pub user_quit: bool,
-    /// Leave TUI, then run the full uninstall pipeline on the main console.
+    /// Leave TUI, then run the uninstall pipeline on the main console.
     pub run_uninstall: bool,
     /// Leave TUI, then UAC-relaunch with `--uninstall-run`.
     pub elevate_uninstall: bool,
+    /// IDE / CLI / both — used with `run_uninstall` / `elevate_uninstall`.
+    pub uninstall_scope: DataScope,
 }
 
 /// Run the full interactive TUI.
@@ -68,5 +71,6 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
         user_quit: app.should_quit,
         run_uninstall: app.run_uninstall,
         elevate_uninstall: app.elevate_uninstall,
+        uninstall_scope: app.uninstall_scope,
     })
 }

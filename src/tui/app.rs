@@ -6,7 +6,7 @@ use crate::cleanup::{
 use crate::cursor_version;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
-use crate::paths::{plan_target_indices, Editor, Risk};
+use crate::paths::{plan_target_indices, DataScope, Editor, Risk};
 use crate::uninstall;
 use crate::tui::widgets::{
     checkbox_items, draw_banner, draw_confirm, draw_input_field, draw_progress, draw_scan_table,
@@ -71,8 +71,8 @@ enum ConfirmAction {
         editor: Editor,
         then: Box<PendingWork>,
     },
-    /// Full wipe of Cursor IDE + Agent CLI (install + leftovers).
-    Uninstall,
+    /// Wipe Cursor IDE and/or Agent CLI (install + leftovers).
+    Uninstall { scope: DataScope },
 }
 
 #[derive(Clone)]
@@ -96,6 +96,8 @@ enum Screen {
         selected: Vec<usize>,
     },
     BackupMode,
+    /// Pick IDE / CLI / both before confirming full uninstall.
+    UninstallScope,
     BackupName {
         include_state: bool,
     },
@@ -150,6 +152,8 @@ pub struct App {
     pub run_uninstall: bool,
     /// Leave TUI and UAC-relaunch with `--uninstall-run` (Windows).
     pub elevate_uninstall: bool,
+    /// Scope chosen for uninstall (IDE / CLI / both).
+    pub uninstall_scope: DataScope,
     /// Set when the user confirmed force-quit; relaunch Cursor after successful work.
     relaunch_after: bool,
     list_hit_area: Rect,
@@ -174,6 +178,7 @@ impl App {
             did_work: false,
             run_uninstall: false,
             elevate_uninstall: false,
+            uninstall_scope: DataScope::Both,
             relaunch_after: false,
             list_hit_area: Rect::default(),
             frame: 0,
@@ -527,6 +532,12 @@ impl App {
                 t(Msg::BackupConfigState).to_string(),
                 t(Msg::Back).to_string(),
             ],
+            Screen::UninstallScope => vec![
+                t(Msg::ScopeIde).to_string(),
+                t(Msg::ScopeCli).to_string(),
+                t(Msg::ScopeBoth).to_string(),
+                t(Msg::Back).to_string(),
+            ],
             Screen::RestoreManage { .. } => vec![
                 t(Msg::ActionRestore).to_string(),
                 t(Msg::ActionDelete).to_string(),
@@ -741,11 +752,11 @@ impl App {
         self.scan_at = self.frame + 6;
     }
 
-    fn confirm_uninstall(&mut self) {
+    fn confirm_uninstall(&mut self, scope: DataScope) {
         let return_to = Box::new(self.screen.clone());
         self.screen = Screen::Confirm {
-            prompt: t(Msg::ConfirmUninstall).to_string(),
-            action: ConfirmAction::Uninstall,
+            prompt: i18n::confirm_uninstall(scope).to_string(),
+            action: ConfirmAction::Uninstall { scope },
             return_to,
         };
         self.reset_list(2);
@@ -807,6 +818,7 @@ impl App {
             Screen::ScanAndPlan { .. } => MenuScreen::Plan,
             Screen::CustomClean { .. } => MenuScreen::CustomClean,
             Screen::BackupMode => MenuScreen::BackupMode,
+            Screen::UninstallScope => MenuScreen::PickScope,
             Screen::RestoreManage { .. } => MenuScreen::RestoreManage,
             Screen::Confirm { .. } => MenuScreen::Confirm,
             _ => MenuScreen::Generic,
@@ -832,8 +844,20 @@ impl App {
                     self.reset_list(3);
                 }
                 2 => self.open_restore_manage(),
-                3 => self.confirm_uninstall(),
+                3 => {
+                    self.screen = Screen::UninstallScope;
+                    self.reset_list(4);
+                }
                 _ => self.should_quit = true,
+            },
+            Screen::UninstallScope => match idx {
+                0 => self.confirm_uninstall(DataScope::Ide),
+                1 => self.confirm_uninstall(DataScope::Cli),
+                2 => self.confirm_uninstall(DataScope::Both),
+                _ => {
+                    self.screen = Screen::MainMenu;
+                    self.reset_list(MAIN_MENU_LEN);
+                }
             },
             Screen::ScanAndPlan {
                 editor,
@@ -1071,11 +1095,11 @@ impl App {
                             return_to,
                         };
                     }
-                    ConfirmAction::Uninstall => {
+                    ConfirmAction::Uninstall { scope } => {
                         self.relaunch_after = false;
+                        self.uninstall_scope = scope;
                         // Official Uninstall.exe needs a normal console + possible UAC.
-                        #[cfg(windows)]
-                        if !uninstall::is_process_elevated() {
+                        if uninstall::needs_elevation(scope) {
                             self.elevate_uninstall = true;
                             self.should_quit = true;
                             return;
@@ -1280,9 +1304,10 @@ impl App {
                 self.relaunch_after = false;
                 Screen::MainMenu
             }
-            Screen::Scanning { .. } | Screen::ScanAndPlan { .. } | Screen::BackupMode => {
-                Screen::MainMenu
-            }
+            Screen::Scanning { .. }
+            | Screen::ScanAndPlan { .. }
+            | Screen::BackupMode
+            | Screen::UninstallScope => Screen::MainMenu,
             Screen::CustomClean {
                 editor,
                 root,
@@ -1475,6 +1500,7 @@ impl App {
                     Screen::Language => t(Msg::PickLang),
                     Screen::MainMenu => t(Msg::MainMenu),
                     Screen::BackupMode => t(Msg::BackupMode),
+                    Screen::UninstallScope => t(Msg::PickUninstall),
                     Screen::RestoreManage { .. } => t(Msg::BackupManage),
                     Screen::RestorePick { .. } => t(Msg::PickBackup),
                     _ => "",

@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.0-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.1-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
@@ -53,7 +53,7 @@ This project is **Cursor-only** and adds:
 2. Download **`cursor-cleanup.exe`** (or the `.zip` and unzip)
 3. **Double-click `cursor-cleanup.exe`**
 4. Pick language → use ↑↓ + Enter (Back available)
-5. Main menu: **Clean** / **Backup** / **Restore** / **Fully uninstall** / Exit
+5. Main menu: **Clean** / **Backup** / **Restore** / **Uninstall** / Exit
 
 ## CLI
 
@@ -72,11 +72,9 @@ cursor-cleanup.exe --yes --scope both
 | `--yes` | Auto-clean safe items (skips if scope processes are running) |
 | `--no-pause` | No pause on exit |
 
-### Full uninstall (TUI)
+### Uninstall (TUI)
 
-Main menu → **Fully uninstall Cursor / CLI** (extra confirm). On Windows, UAC elevation may be requested; the official `Uninstall.exe` runs first, then leftovers such as `%APPDATA%\Cursor`, `%USERPROFILE%\.cursor`, and `%LOCALAPPDATA%\cursor-agent` are removed. Project-local `.cursor/` folders are **not** deleted.
-
-TUI asks first: **Cursor IDE**, **Agent CLI**, or **Both**.
+Main menu → **Uninstall Cursor / CLI…** → choose **IDE** / **CLI** / **Both** (extra confirm). Uninstalling the IDE may request UAC on Windows and runs the official `Uninstall.exe` before wiping leftovers like `%APPDATA%\Cursor`. CLI-only removes `~/.cursor`, `cursor-agent`, and PATH — IDE stays. Project-local `.cursor/` folders are **not** deleted.
 
 ## What it cleans
 
@@ -86,7 +84,7 @@ TUI asks first: **Cursor IDE**, **Agent CLI**, or **Both**.
 | Medium | Local edit History, **Agent CLI state / chats / projects** |
 | High | `state.vscdb` (AI chats / recent files / UI), **Agent CLI login `auth.json`** |
 
-Normal **Clean** does **not** delete project code, installed extensions, or the Agent CLI install. **Fully uninstall** removes the install and user data (see above).
+Normal **Clean** does **not** delete project code, installed extensions, or the Agent CLI install. **Uninstall** removes the IDE and/or CLI install and user data for the chosen scope (see above).
 
 Force-quit stops only processes for the chosen scope. Full “Both” backup includes `auth.json`.
 

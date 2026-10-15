@@ -104,12 +104,15 @@ tr! {
     MenuClean => { tw: "清理快取 / 狀態", cn: "清理缓存 / 状态", en: "Clean caches / state" },
     MenuBackup => { tw: "備份", cn: "备份", en: "Backup" },
     MenuRestore => { tw: "恢復 / 刪除備份", cn: "恢复 / 删除备份", en: "Restore / delete backups" },
-    MenuUninstall => { tw: "完整卸載 Cursor / CLI", cn: "完整卸载 Cursor / CLI", en: "Fully uninstall Cursor / CLI" },
+    MenuUninstall => { tw: "卸載 Cursor / CLI…", cn: "卸载 Cursor / CLI…", en: "Uninstall Cursor / CLI…" },
     ConfirmUninstall => { tw: "將完整移除 Cursor IDE 與 Agent CLI（含設定、聊天、登入、擴充與 CLI）。Windows 會先開啟官方卸載程式，結束後再清除殘留資料夾。需要系統管理員權限。專案內的 .cursor 不會刪除。確定？", cn: "将完整移除 Cursor IDE 与 Agent CLI（含设置、聊天、登录、扩展与 CLI）。Windows 会先打开官方卸载程序，结束后再清除残留文件夹。需要管理员权限。项目内的 .cursor 不会删除。确定？", en: "This permanently removes Cursor IDE and Agent CLI (settings, chats, login, extensions, CLI). On Windows the official uninstaller runs first, then leftover folders are deleted. Administrator rights required. Project .cursor folders are not touched. Continue?" },
+    ConfirmUninstallIde => { tw: "將移除 Cursor IDE（含設定、聊天、登入、擴充）。Windows 會先開啟官方卸載程式，結束後再清除殘留。需要系統管理員權限。不會刪除 Agent CLI（~/.cursor、cursor-agent）。專案內的 .cursor 不會刪除。確定？", cn: "将移除 Cursor IDE（含设置、聊天、登录、扩展）。Windows 会先打开官方卸载程序，结束后再清除残留。需要管理员权限。不会删除 Agent CLI（~/.cursor、cursor-agent）。项目内的 .cursor 不会删除。确定？", en: "This removes Cursor IDE (settings, chats, login, extensions). On Windows the official uninstaller runs first, then leftovers are deleted. Administrator rights required. Agent CLI (~/.cursor, cursor-agent) is kept. Project .cursor folders are not touched. Continue?" },
+    ConfirmUninstallCli => { tw: "將移除 Agent CLI（~/.cursor、cursor-agent 與 PATH）。不會刪除 Cursor IDE 安裝與 %APPDATA%\\Cursor。專案內的 .cursor 不會刪除。確定？", cn: "将移除 Agent CLI（~/.cursor、cursor-agent 与 PATH）。不会删除 Cursor IDE 安装与 %APPDATA%\\Cursor。项目内的 .cursor 不会删除。确定？", en: "This removes Agent CLI (~/.cursor, cursor-agent, and PATH). Cursor IDE install and %APPDATA%\\Cursor are kept. Project .cursor folders are not touched. Continue?" },
     UninstallNeedAdmin => { tw: "需要系統管理員權限，正在請求 UAC…", cn: "需要管理员权限，正在请求 UAC…", en: "Administrator required — requesting UAC…" },
     UninstallElevateFail => { tw: "無法以管理員身分啟動（已取消或失敗）", cn: "无法以管理员身份启动（已取消或失败）", en: "Could not start elevated (cancelled or failed)" },
-    UninstallRunning => { tw: "正在完整卸載 Cursor…", cn: "正在完整卸载 Cursor…", en: "Fully uninstalling Cursor…" },
-    UninstallStepQuit => { tw: "強制關閉 Cursor / Agent CLI…", cn: "强制关闭 Cursor / Agent CLI…", en: "Force-quitting Cursor / Agent CLI…" },
+    UninstallRunning => { tw: "正在完整卸載 Cursor IDE + CLI…", cn: "正在完整卸载 Cursor IDE + CLI…", en: "Fully uninstalling Cursor IDE + CLI…" },
+    UninstallRunningIde => { tw: "正在卸載 Cursor IDE…", cn: "正在卸载 Cursor IDE…", en: "Uninstalling Cursor IDE…" },
+    UninstallRunningCli => { tw: "正在卸載 Agent CLI…", cn: "正在卸载 Agent CLI…", en: "Uninstalling Agent CLI…" },
     UninstallStepUninstaller => { tw: "啟動官方卸載程式（請在視窗中完成）", cn: "启动官方卸载程序（请在窗口中完成）", en: "Launching official uninstaller (finish in the window)" },
     UninstallStepLeftovers => { tw: "清除殘留資料夾…", cn: "清除残留文件夹…", en: "Removing leftover folders…" },
     UninstallStepPath => { tw: "從使用者 PATH 移除 cursor-agent…", cn: "从用户 PATH 移除 cursor-agent…", en: "Removing cursor-agent from user PATH…" },
@@ -120,8 +123,11 @@ tr! {
     UninstallFailedCount => { tw: "失敗", cn: "失败", en: "failed" },
     UninstallPathCleaned => { tw: "已更新使用者 PATH", cn: "已更新用户 PATH", en: "Updated user PATH" },
     UninstallDone => { tw: "完整卸載完成", cn: "完整卸载完成", en: "Full uninstall complete" },
+    UninstallDoneIde => { tw: "Cursor IDE 卸載完成", cn: "Cursor IDE 卸载完成", en: "Cursor IDE uninstall complete" },
+    UninstallDoneCli => { tw: "Agent CLI 卸載完成", cn: "Agent CLI 卸载完成", en: "Agent CLI uninstall complete" },
     UninstallDonePartial => { tw: "卸載完成，但部分項目失敗", cn: "卸载完成，但部分项目失败", en: "Uninstall finished with some failures" },
     PickScope => { tw: "選擇資料範圍", cn: "选择数据范围", en: "Choose data scope" },
+    PickUninstall => { tw: "選擇要卸載的項目", cn: "选择要卸载的项目", en: "Choose what to uninstall" },
     ScopeIde => { tw: "Cursor IDE（編輯器）", cn: "Cursor IDE（编辑器）", en: "Cursor IDE (editor)" },
     ScopeCli => { tw: "Agent CLI（終端 agent）", cn: "Agent CLI（终端 agent）", en: "Agent CLI (terminal agent)" },
     ScopeBoth => { tw: "兩者都要", cn: "两者都要", en: "Both" },
@@ -226,6 +232,14 @@ pub fn confirm_deep_clean(has_state: bool, has_auth: bool) -> &'static str {
         (true, false) => t(Msg::ConfirmDeepCleanIde),
         (false, true) => t(Msg::ConfirmDeepCleanCli),
         (false, false) => t(Msg::ConfirmDeepClean),
+    }
+}
+
+pub fn confirm_uninstall(scope: crate::paths::DataScope) -> &'static str {
+    match scope {
+        crate::paths::DataScope::Ide => t(Msg::ConfirmUninstallIde),
+        crate::paths::DataScope::Cli => t(Msg::ConfirmUninstallCli),
+        crate::paths::DataScope::Both => t(Msg::ConfirmUninstall),
     }
 }
 
@@ -371,12 +385,12 @@ cursor-cleanup  —  Cursor 清理 / 備份工具
   -s, --scope <ide|cli|both>      資料範圍（預設 both；TUI 會再詢問）
   -y, --yes                       非互動，只清安全項（對應 scope 行程中會略過）
       --scan                      只掃描占用
-      --uninstall-run             完整卸載（管理員／內部用）
+      --uninstall-run             卸載（管理員／內部用；可搭配 --scope）
       --no-pause                  結束不暫停
   -h, --help                      說明
   -V, --version                   版本
 
-無參數：TUI 互動 — 清理／備份／恢復／完整卸載
+無參數：TUI 互動 — 清理／備份／恢復／卸載（可選 IDE／CLI／兩者）
 --scan / --yes：純文字輸出（可用 --scope）
 備份位置：與程式同目錄的 backups\\\\
 "
@@ -395,12 +409,12 @@ cursor-cleanup  —  Cursor 清理 / 备份工具
   -s, --scope <ide|cli|both>      数据范围（默认 both；TUI 会再询问）
   -y, --yes                       非互动，只清安全项（对应 scope 进程中会跳过）
       --scan                      只扫描占用
-      --uninstall-run             完整卸载（管理员／内部用）
+      --uninstall-run             卸载（管理员／内部用；可搭配 --scope）
       --no-pause                  结束不暂停
   -h, --help                      帮助
   -V, --version                   版本
 
-无参数：TUI 互动 — 清理／备份／恢复／完整卸载
+无参数：TUI 互动 — 清理／备份／恢复／卸载（可选 IDE／CLI／两者）
 --scan / --yes：纯文字输出（可用 --scope）
 备份位置：与程序同目录的 backups\\\\
 "
@@ -419,12 +433,12 @@ Options:
   -s, --scope <ide|cli|both>      Data scope (default both; TUI asks again)
   -y, --yes                       Non-interactive, safe items only (skips if scope processes running)
       --scan                      Scan sizes only
-      --uninstall-run             Full uninstall (admin / internal)
+      --uninstall-run             Uninstall (admin / internal; use with --scope)
       --no-pause                  Do not pause on exit
   -h, --help                      Help
   -V, --version                   Version
 
-No args: TUI — Clean / Backup / Restore / Full uninstall
+No args: TUI — Clean / Backup / Restore / Uninstall (IDE / CLI / both)
 --scan / --yes: stdout mode (supports --scope)
 Backups: backups\\\\ next to the executable
 "

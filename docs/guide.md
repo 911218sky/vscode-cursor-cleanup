@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.5.0** (Cursor-only; full uninstall + confirm before force-quit / restore)
+Version: **v0.5.1** (Cursor-only; uninstall IDE / CLI / both + confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -36,14 +36,14 @@ Same mission, but **Cursor-only**: safe tiered cleanup without touching project 
    - **Clean** — caches / history / state.vscdb
    - **Backup** — config only, or config + `state.vscdb` (recommended)
    - **Restore / delete** — restore one backup, or multi-select delete under `backups/`
-   - **Fully uninstall** — official Uninstall.exe (Windows, may request UAC) then wipe leftovers / CLI
+   - **Uninstall** — pick IDE / CLI / both; IDE uses official Uninstall.exe (Windows, may request UAC) then wipes leftovers for that scope
 7. For Clean, choose a plan:
    - **Conservative** — safe caches only
    - **Standard** — safe + edit history
    - **Deep** — includes `state.vscdb`
    - **Custom** — confirm each item
 8. Optionally return to the main menu or exit
-9. Full uninstall removes `%APPDATA%\Cursor`, `%USERPROFILE%\.cursor`, `%LOCALAPPDATA%\cursor-agent`, etc. Project-local `.cursor/` folders are **not** deleted.
+9. Uninstall removes paths for the chosen scope (e.g. IDE → `%APPDATA%\Cursor`; CLI → `~/.cursor`, `cursor-agent`). Project-local `.cursor/` folders are **not** deleted.
 
 UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plain stdout. Cleanup/backup logic uses the Rust standard library.
 
