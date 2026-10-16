@@ -148,9 +148,7 @@ fn run_cli_scan(scope: DataScope, pause_on_exit: bool) {
     cli::print_banner();
     let editor = paths::Editor::Cursor;
     if let Some((root, total, stats)) = cleanup::collect_stats_for(editor, scope) {
-        let root_ok = root.exists()
-            || (scope == DataScope::Cli && editor.data_dir().is_some_and(|p| p.exists()));
-        if root_ok {
+        if cleanup::scope_data_available(editor, scope, &root) {
             cli::print_scan(editor, scope, &root, total, &stats);
         } else {
             cli::warn(&i18n::fmt_no_dir(

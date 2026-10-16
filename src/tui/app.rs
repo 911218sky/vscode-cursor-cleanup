@@ -1,7 +1,8 @@
 use crate::backup::{self, sanitize_backup_name, BackupInfo};
 use crate::cleanup::{
     collect_stats_for, force_quit_scope, is_editor_running, is_scope_running, launch_editor,
-    run_target, sum_target_sizes, wait_until_scope_unlocked, TargetStat,
+    process_scope_for_stats, run_target, scope_data_available, sum_target_sizes,
+    wait_until_scope_unlocked, TargetStat,
 };
 use crate::cursor_version;
 use crate::fsutil::fmt_size;
@@ -248,7 +249,7 @@ impl App {
             return;
         }
         if let Some((root, total, stats)) = collect_stats_for(editor, scope) {
-            if root.exists() {
+            if scope_data_available(editor, scope, &root) {
                 self.screen = Self::scan_screen(editor, scope, root, total, stats);
                 self.reset_list(5);
                 return;
@@ -470,6 +471,8 @@ impl App {
         stats: Vec<TargetStat>,
         selected: Vec<usize>,
     ) {
+        // CLI auth.json lives under the IDE tree — widen process/unlock scope.
+        let proc_scope = process_scope_for_stats(scope, &stats, &selected);
         let then = PendingWork::ExecuteClean {
             editor,
             scope,
@@ -478,7 +481,7 @@ impl App {
             stats: stats.clone(),
             selected: selected.clone(),
         };
-        if self.ensure_scope_or_confirm(editor, scope, then) {
+        if self.ensure_scope_or_confirm(editor, proc_scope, then) {
             self.execute_clean(editor, scope, root, total, stats, selected);
         }
     }
@@ -836,8 +839,9 @@ impl App {
         stats: Vec<TargetStat>,
         selected: Vec<usize>,
     ) {
+        let proc_scope = process_scope_for_stats(scope, &stats, &selected);
         // Process may already be gone without force-quit — still wait for locks.
-        if !wait_until_scope_unlocked(editor, scope, true) {
+        if !wait_until_scope_unlocked(editor, proc_scope, true) {
             self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::DataStillLocked).to_string());
             self.screen = Screen::MainMenu;

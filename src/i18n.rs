@@ -145,6 +145,7 @@ tr! {
     ConfirmRestore => { tw: "確定恢復此備份？", cn: "确定恢复此备份？", en: "Restore this backup?" },
     ConfirmRestoreRunning => { tw: "Cursor 正在執行 — 恢復前必須先關閉（下一步會詢問是否強制關閉）。", cn: "Cursor 正在运行 — 恢复前必须先关闭（下一步会询问是否强制关闭）。", en: "Cursor is running — must close before restore (you will be asked to force quit next)." },
     ConfirmDeepClean => { tw: "將刪除 state.vscdb 與 Agent CLI 登入（auth.json）。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除 state.vscdb 与 Agent CLI 登录（auth.json）。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes state.vscdb and Agent CLI login (auth.json). Irreversible without a backup. Continue?" },
+    ConfirmDeepCleanHigh => { tw: "將刪除高危項目。此操作無法還原（除非你有備份）。確定繼續？", cn: "将删除高危项目。此操作无法还原（除非你有备份）。确定继续？", en: "This deletes high-risk items. Irreversible without a backup. Continue?" },
     ForceQuittingIde => { tw: "正在強制關閉 Cursor IDE…", cn: "正在强制关闭 Cursor IDE…", en: "Force-quitting Cursor IDE…" },
     ForceQuittingCli => { tw: "正在強制關閉 Agent CLI…", cn: "正在强制关闭 Agent CLI…", en: "Force-quitting Agent CLI…" },
     RestoreEditorRunning => { tw: "Cursor 仍在執行，無法寫入設定檔", cn: "Cursor 仍在运行，无法写入配置文件", en: "Cursor still running — cannot write config files" },
@@ -231,7 +232,7 @@ pub fn confirm_deep_clean(has_state: bool, has_auth: bool) -> &'static str {
         (true, true) => t(Msg::ConfirmDeepClean),
         (true, false) => t(Msg::ConfirmDeepCleanIde),
         (false, true) => t(Msg::ConfirmDeepCleanCli),
-        (false, false) => t(Msg::ConfirmDeepClean),
+        (false, false) => t(Msg::ConfirmDeepCleanHigh),
     }
 }
 

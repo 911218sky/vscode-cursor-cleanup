@@ -1,23 +1,23 @@
-ï»¿# cursor-cleanup User Guide
+# cursor-cleanup User Guide
 
-Version: **v0.5.3** (Cursor-only; clean/uninstall pick IDE / CLI / both + confirm before force-quit / restore)
+Version: **v0.5.4** (Cursor-only; clean/uninstall pick IDE / CLI / both + confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
 
 ## vs ThendCN/vscode-cursor-cleanup
 
-Upstream: [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) â€” macOS Bash scripts for interactive cache / `state.vscdb` cleanup with ZIP backup during clean.
+Upstream: [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) ¡ª macOS Bash scripts for interactive cache / `state.vscdb` cleanup with ZIP backup during clean.
 
 | | Upstream | This project |
 |--|----------|--------------|
 | Form | `.sh` | Rust single binary |
 | OS | macOS-focused | Windows / macOS / Linux |
-| UX | `read` prompts | Double-click TUI â€” mouse click + keyboard + Back |
+| UX | `read` prompts | Double-click TUI ¡ª mouse click + keyboard + Back |
 | i18n | Chinese script text | zh-TW (default) / zh-CN / en |
-| Plans | Steps 1â€“6 | Conservative / Standard / Deep / Custom |
-| Backup | Inside cleanup ZIP | Dedicated Backup (config Â± `state.vscdb`) |
-| Restore | Manual unzip in docs | Dedicated Restore â€” pick a folder |
+| Plans | Steps 1¨C6 | Conservative / Standard / Deep / Custom |
+| Backup | Inside cleanup ZIP | Dedicated Backup (config ¡À `state.vscdb`) |
+| Restore | Manual unzip in docs | Dedicated Restore ¡ª pick a folder |
 | Release | Clone scripts | GitHub Actions multi-platform binaries |
 
 Same mission, but **Cursor-only**: safe tiered cleanup without touching project code or installed extensions.
@@ -29,21 +29,21 @@ Same mission, but **Cursor-only**: safe tiered cleanup without touching project 
 1. Download from [Releases](https://github.com/911218sky/vscode-cursor-cleanup/releases)  
    Windows: **`cursor-cleanup.exe`** (or `cursor-cleanup-x86_64-pc-windows-msvc.zip`)
 2. If you got the zip, unzip to get `cursor-cleanup.exe`
-3. **Double-click** â†’ terminal opens
+3. **Double-click** ¡ú terminal opens
 4. Pick language (default Traditional Chinese)
-5. Use **mouse click** or **â†‘â†“ + Enter**; each step has **Esc / â† Back**
+5. Use **mouse click** or **¡ü¡ý + Enter**; each step has **Esc / ¡û Back**
 6. Main menu:
-   - **Clean** â€” pick IDE / CLI / both, then caches / history / state.vscdb (or CLI equivalents)
-   - **Backup** â€” config only, or config + `state.vscdb` (recommended)
-   - **Restore / delete** â€” restore one backup, or multi-select delete under `backups/`
-   - **Uninstall** â€” pick IDE / CLI / both; IDE uses official Uninstall.exe (Windows, may request UAC) then wipes leftovers for that scope
+   - **Clean** ¡ª pick IDE / CLI / both, then caches / history / state.vscdb (or CLI equivalents)
+   - **Backup** ¡ª config only, or config + `state.vscdb` (recommended)
+   - **Restore / delete** ¡ª restore one backup, or multi-select delete under `backups/`
+   - **Uninstall** ¡ª pick IDE / CLI / both; IDE uses official Uninstall.exe (Windows, may request UAC) then wipes leftovers for that scope
 7. For Clean, after choosing scope, pick a plan:
-   - **Conservative** â€” safe caches only
-   - **Standard** â€” safe + edit history
-   - **Deep** â€” includes `state.vscdb`
-   - **Custom** â€” confirm each item
+   - **Conservative** ¡ª safe caches only
+   - **Standard** ¡ª safe + edit history
+   - **Deep** ¡ª includes `state.vscdb`
+   - **Custom** ¡ª confirm each item
 8. Optionally return to the main menu or exit
-9. Uninstall removes paths for the chosen scope (e.g. IDE â†’ `%APPDATA%\Cursor`; CLI â†’ `~/.cursor`, `cursor-agent`). Project-local `.cursor/` folders are **not** deleted.
+9. Uninstall removes paths for the chosen scope (e.g. IDE ¡ú `%APPDATA%\Cursor`; CLI ¡ú `~/.cursor`, `cursor-agent`). Project-local `.cursor/` folders are **not** deleted.
 
 UI: `ratatui` + `crossterm` (mouse + keyboard). CLI `--scan` / `--yes` uses plain stdout. Cleanup/backup logic uses the Rust standard library.
 
@@ -101,11 +101,11 @@ Force-quit also stops Agent CLI processes (`agent` / `cursor-agent`). Full backu
 
 ## Recommendations
 
-1. Quit Cursor before cleaning (avoids locked files) â€” the TUI will ask before force-quit
+1. Quit Cursor before cleaning (avoids locked files) ¡ª the TUI will ask before force-quit
 2. Prefer **Conservative** for routine use
-3. Only use **Deep** when `state.vscdb` is huge (e.g. > 1GB) and the app feels slow â€” backup first
+3. Only use **Deep** when `state.vscdb` is huge (e.g. > 1GB) and the app feels slow ¡ª backup first
 
-Note: Deep clean removes the entire `state.vscdb` and Agent CLI `auth.json`. It cannot selectively purge only archived AI chats while keeping the chat list. Prefer Cursorâ€™s built-in **Delete Old Chats** / **GC Agent KV Blobs** for that.
+Note: Deep clean removes the entire `state.vscdb` and Agent CLI `auth.json`. It cannot selectively purge only archived AI chats while keeping the chat list. Prefer Cursor¡¯s built-in **Delete Old Chats** / **GC Agent KV Blobs** for that.
 
 ## Build from source
 

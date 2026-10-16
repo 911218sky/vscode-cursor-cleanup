@@ -2,7 +2,8 @@ use crate::fsutil::{
     path_size, probe_path_unlocked, remove_best_effort, unlock_probe_paths,
 };
 use crate::paths::{
-    clean_targets_for, is_safe_rel_path, CleanTarget, DataRoot, DataScope, Editor,
+    clean_targets_for, is_safe_rel_path, lock_scope_for_kinds, CleanTarget, DataRoot, DataScope,
+    Editor,
 };
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -127,7 +128,13 @@ pub fn wait_until_data_unlocked(editor: Editor, quiet: bool) -> bool {
     wait_until_scope_unlocked(editor, DataScope::Both, quiet)
 }
 
-pub fn wait_until_scope_unlocked(editor: Editor, scope: DataScope, quiet: bool) -> bool {
+/// Absolute unlock-probe paths for `scope`.
+///
+/// `auth.json` lives under the IDE data dir but belongs to CLI. It is only
+/// probed when the scope includes **both** IDE and CLI processes (e.g. `Both`,
+/// or CLI clean expanded because `AgentCliAuth` is selected). CLI-only cleans
+/// of `~/.cursor` caches must not wait on IDE-held `auth.json`.
+pub fn unlock_probes_for(editor: Editor, scope: DataScope) -> Vec<PathBuf> {
     let mut probes = Vec::new();
     if scope.includes_ide() {
         if let Some(root) = editor.data_dir() {
@@ -137,17 +144,25 @@ pub fn wait_until_scope_unlocked(editor: Editor, scope: DataScope, quiet: bool) 
         }
     }
     if scope.includes_cli() {
-        if let Some(root) = editor.data_dir() {
-            if root.exists() {
-                probes.push(root.join("auth.json"));
-            }
-        }
         if let Some(home) = editor.cursor_home() {
             if home.exists() {
                 probes.push(home.join("agent-cli-state.json"));
             }
         }
     }
+    // auth.json: IDE tree + CLI login — only when both product sides are in scope.
+    if scope.includes_ide() && scope.includes_cli() {
+        if let Some(root) = editor.data_dir() {
+            if root.exists() {
+                probes.push(root.join("auth.json"));
+            }
+        }
+    }
+    probes
+}
+
+pub fn wait_until_scope_unlocked(editor: Editor, scope: DataScope, quiet: bool) -> bool {
+    let probes = unlock_probes_for(editor, scope);
     if probes.is_empty() {
         return true;
     }
@@ -456,6 +471,32 @@ pub fn collect_stats_for(
     Some((root, total, stats))
 }
 
+/// Whether scan/clean may proceed for `scope` given the primary display `root`.
+/// CLI-only: allow when IDE data dir exists (auth.json) even if `~/.cursor` is missing.
+pub fn scope_data_available(editor: Editor, scope: DataScope, root: &Path) -> bool {
+    root.exists()
+        || (scope == DataScope::Cli && editor.data_dir().is_some_and(|p| p.exists()))
+}
+
+/// Process / unlock scope for the chosen clean items.
+///
+/// Narrows `Both` when only one side is selected, and widens CLI-only when
+/// `AgentCliAuth` is included (`auth.json` is locked by the IDE).
+pub fn process_scope_for_stats(
+    scope: DataScope,
+    stats: &[TargetStat],
+    selected: &[usize],
+) -> DataScope {
+    let kinds: Vec<_> = selected
+        .iter()
+        .filter_map(|&i| stats.get(i).map(|s| s.target.kind))
+        .collect();
+    if kinds.is_empty() {
+        return scope;
+    }
+    lock_scope_for_kinds(&kinds)
+}
+
 /// Re-measure known cleanup targets only (not the whole data root).
 pub fn sum_target_sizes(editor: Editor, stats: &[TargetStat]) -> u64 {
     stats
@@ -557,13 +598,106 @@ pub fn has_cursor_home_targets(stats: &[TargetStat]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{join_under_root, run_target_under, windows_cursor_candidates};
-    use crate::paths::{CleanTarget, DataRoot, Risk, TargetKind};
+    use super::{
+        join_under_root, process_scope_for_stats, run_target_under, scope_data_available,
+        unlock_probes_for, windows_cursor_candidates, TargetStat,
+    };
+    use crate::paths::{lock_scope_for_kinds, CleanTarget, DataRoot, DataScope, Risk, TargetKind};
     use std::fs;
     use std::path::PathBuf;
 
     #[cfg(windows)]
     use super::csv_first_field;
+
+    fn dummy_stat(kind: TargetKind) -> TargetStat {
+        TargetStat {
+            target: CleanTarget {
+                kind,
+                risk: Risk::Safe,
+                root: DataRoot::Ide,
+                rel_paths: &[],
+            },
+            bytes: 0,
+        }
+    }
+
+    #[test]
+    fn process_scope_expands_cli_when_auth_selected() {
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::AgentCliCache]),
+            DataScope::Cli
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::AgentCliAuth]),
+            DataScope::Both
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::State]),
+            DataScope::Ide
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::AgentCliCache, TargetKind::AgentCliAuth]),
+            DataScope::Both
+        );
+
+        let stats = vec![
+            dummy_stat(TargetKind::AgentCliCache),
+            dummy_stat(TargetKind::AgentCliAuth),
+        ];
+        assert_eq!(
+            process_scope_for_stats(DataScope::Cli, &stats, &[0]),
+            DataScope::Cli
+        );
+        assert_eq!(
+            process_scope_for_stats(DataScope::Cli, &stats, &[1]),
+            DataScope::Both
+        );
+        assert_eq!(
+            process_scope_for_stats(DataScope::Both, &stats, &[0]),
+            DataScope::Cli
+        );
+    }
+
+    #[test]
+    fn scope_data_available_cli_falls_back_to_ide_dir() {
+        let editor = crate::paths::Editor::Cursor;
+        // Synthetic missing primary root — helper must still accept IDE dir fallback.
+        let missing = PathBuf::from("Z:/cursor-cleanup-missing-root-does-not-exist");
+        let ok = scope_data_available(editor, DataScope::Cli, &missing);
+        let ide_exists = editor.data_dir().is_some_and(|p| p.exists());
+        assert_eq!(ok, ide_exists);
+        assert!(!scope_data_available(editor, DataScope::Ide, &missing));
+        assert!(!scope_data_available(editor, DataScope::Both, &missing));
+    }
+
+    #[test]
+    fn unlock_probes_cli_omits_auth_json() {
+        let editor = crate::paths::Editor::Cursor;
+        let is_auth = |p: &PathBuf| {
+            p.file_name()
+                .is_some_and(|n| n.eq_ignore_ascii_case("auth.json"))
+        };
+        assert!(
+            unlock_probes_for(editor, DataScope::Cli)
+                .iter()
+                .all(|p| !is_auth(p)),
+            "CLI-only unlock must not wait on IDE-held auth.json"
+        );
+        assert!(
+            unlock_probes_for(editor, DataScope::Ide)
+                .iter()
+                .all(|p| !is_auth(p)),
+            "IDE-only unlock must not wait on auth.json"
+        );
+        if editor.data_dir().is_some_and(|p| p.exists()) {
+            assert!(
+                unlock_probes_for(editor, DataScope::Both)
+                    .iter()
+                    .any(is_auth),
+                "Both must probe auth.json when IDE data dir exists"
+            );
+        }
+    }
 
     #[test]
     fn join_under_root_rejects_traversal() {

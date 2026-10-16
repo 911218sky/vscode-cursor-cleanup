@@ -1,7 +1,8 @@
 //! Plain stdout output for `--scan` / `--yes` CLI mode (non-TUI).
 
 use crate::cleanup::{
-    collect_stats_for, is_scope_running, run_target, sum_target_sizes, TargetStat,
+    collect_stats_for, is_scope_running, process_scope_for_stats, run_target,
+    scope_data_available, sum_target_sizes, TargetStat,
 };
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Msg};
@@ -234,10 +235,7 @@ pub fn run_yes_clean(editor: Editor, scope: DataScope) -> bool {
         warn(&i18n::fmt_no_resolve(editor.display_name()));
         return false;
     };
-    let root_ok = root.exists()
-        || (scope == DataScope::Cli
-            && editor.data_dir().is_some_and(|p| p.exists()));
-    if !root_ok {
+    if !scope_data_available(editor, scope, &root) {
         warn(&i18n::fmt_no_dir(
             editor.display_name(),
             &root.display().to_string(),
@@ -246,15 +244,16 @@ pub fn run_yes_clean(editor: Editor, scope: DataScope) -> bool {
     }
     print_scan(editor, scope, &root, total, &stats);
 
-    if is_scope_running(editor, scope) {
-        warn(t(Msg::EditorRunningAbort));
-        return false;
-    }
-
     let selected = idx_risk(&stats, |r| matches!(r, Risk::Safe));
     if selected.is_empty() {
         ok(t(Msg::AllDone));
         return true;
+    }
+
+    let proc_scope = process_scope_for_stats(scope, &stats, &selected);
+    if is_scope_running(editor, proc_scope) {
+        warn(t(Msg::EditorRunningAbort));
+        return false;
     }
 
     let mut freed_total = 0u64;

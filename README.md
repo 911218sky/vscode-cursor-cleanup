@@ -1,64 +1,64 @@
-ï»¿# cursor-cleanup
+# cursor-cleanup
 
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.3-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.4-brightgreen.svg)
 
-**é›™æ“Šå³å¯ç”¨çš„äº’å‹•æ¸…ç†å·¥å…·** Â· ä¹Ÿæ”¯æ´ CLI  
-é è¨­ä»‹é¢ï¼š**ç¹é«”ä¸­æ–‡**ï¼ˆå¯åˆ‡æ›ç°¡é«”ï¼Englishï¼‰
+**ëp“ô¼´¿ÉÓÃµÄ»¥„ÓÇåÀí¹¤¾ß** ¡¤ Ò²Ö§Ô® CLI  
+îAÔO½éÃæ£º**·±ówÖĞÎÄ**£¨¿ÉÇĞ“Qº†ów£¯English£©
 
-æ¸…ç† Cursor å¿«å–èˆ‡è†¨è„¹çš„ `state.vscdb`
+ÇåÀí Cursor ¿ìÈ¡ÅcÅòÃ›µÄ `state.vscdb`
 
-[English](./README.en.md) Â· [ç®€ä½“ä¸­æ–‡](./README.zh-CN.md) Â· [Docs (EN)](./docs/guide.md)
+[English](./README.en.md) ¡¤ [¼òÌåÖĞÎÄ](./README.zh-CN.md) ¡¤ [Docs (EN)](./docs/guide.md)
 
 </div>
 
 ---
 
-åŸºæ–¼ [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) ä»¥ Rust é‡å¯«ã€‚  
-å€‰åº«ï¼šhttps://github.com/911218sky/vscode-cursor-cleanup
+»ùì¶ [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) ÒÔ Rust ÖØŒ‘¡£  
+‚}ì£ºhttps://github.com/911218sky/vscode-cursor-cleanup
 
-## è·Ÿä¸Šæ¸¸å·®åœ¨å“ªï¼Ÿï¼ˆäº®é»ï¼‰
+## ¸úÉÏÓÎ²îÔÚÄÄ£¿£¨ÁÁüc£©
 
-ä¸Šæ¸¸ [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) æ˜¯ **macOS Bash è…³æœ¬**ï¼Œäº’å‹•æ¸…ç† VSCodeï¼Cursor å¿«å–èˆ‡ `state.vscdb`ï¼Œä¸¦ç”¨ ZIP å‚™ä»½ã€‚
+ÉÏÓÎ [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) ÊÇ **macOS Bash Ä_±¾**£¬»¥„ÓÇåÀí VSCode£¯Cursor ¿ìÈ¡Åc `state.vscdb`£¬KÓÃ ZIP ‚ä·İ¡£
 
-æœ¬å°ˆæ¡ˆæ”¹ç‚º **åƒ…æ”¯æ´ Cursor**ï¼Œä¸¦åœ¨åŒä¸€é¡å•é¡Œä¸Šåšäº†é€™äº›å‡ç´šï¼š
+±¾Œ£°¸¸Äé **ƒHÖ§Ô® Cursor**£¬KÔÚÍ¬Ò»î†–î}ÉÏ×öÁËß@Ğ©Éı¼‰£º
 
-| | ä¸Šæ¸¸ ThendCN | æœ¬å°ˆæ¡ˆ |
+| | ÉÏÓÎ ThendCN | ±¾Œ£°¸ |
 |--|--------------|-------------------|
-| å½¢æ…‹ | `.sh` è…³æœ¬ | **å–®ä¸€ exeï¼äºŒé€²ä½**ï¼ˆRustï¼‰ |
-| å¹³å° | ä¸»è¦ **macOS** | **Windows / macOS / Linux** |
-| ä½¿ç”¨æ–¹å¼ | çµ‚ç«¯è·‘è…³æœ¬ã€è¨­ alias | **é›™æ“Šå³å¯**ï¼Œä¹Ÿå¯ CLI |
-| äº’å‹• UI | `read` å•ç­” | **æ–¹å‘éµé¸å–®** + å„æ­¥å¯ã€Œè¿”å›ã€ |
-| èªè¨€ | ä¸­æ–‡è…³æœ¬æ–‡æ¡ˆ | **ç¹ä¸­ï¼ˆé è¨­ï¼‰ï¼ç°¡ä¸­ï¼è‹±æ–‡** |
-| æ¸…ç†æ–¹æ¡ˆ | é€æ­¥ç¢ºèª 1â€“6 | **ä¿å®ˆï¼æ¨™æº–ï¼æ·±åº¦ï¼è‡ªè¨‚** |
-| å‚™ä»½ | æ¸…ç†æµç¨‹å…§ ZIP åˆ°æ¡Œé¢ | **ç¨ç«‹ã€Œå‚™ä»½ã€**ï¼Œå¯å«è¨­å®š Â± `state.vscdb` |
-| æ¢å¾© | æ–‡ä»¶è£¡æ‰‹å‹• `unzip`ï¼è¤‡è£½ | **æ¢å¾©ï¼åˆªé™¤å‚™ä»½**ï¼Œå¯é¸ä¸€ä»½æ¢å¾©æˆ–å‹¾é¸å¤šä»½åˆªé™¤ |
-| ç™¼å¸ƒ | è‡ªè¡Œ clone è…³æœ¬ | **GitHub Actions** å¤šå¹³å° Release |
-| è·¯å¾‘ | æ›¾ç¡¬ç·¨ç¢¼ä½¿ç”¨è€…ç›®éŒ„ | ä¾ç³»çµ±è§£æ `%APPDATA%` / Application Support ç­‰ |
+| ĞÎ‘B | `.sh` Ä_±¾ | **†ÎÒ» exe£¯¶şßMÎ»**£¨Rust£© |
+| Æ½Ì¨ | Ö÷Òª **macOS** | **Windows / macOS / Linux** |
+| Ê¹ÓÃ·½Ê½ | ½K¶ËÅÜÄ_±¾¡¢ÔO alias | **ëp“ô¼´¿É**£¬Ò²¿É CLI |
+| »¥„Ó UI | `read` †–´ğ | **·½ÏòæIßx†Î** + ¸÷²½¿É¡¸·µ»Ø¡¹ |
+| ÕZÑÔ | ÖĞÎÄÄ_±¾ÎÄ°¸ | **·±ÖĞ£¨îAÔO£©£¯º†ÖĞ£¯Ó¢ÎÄ** |
+| ÇåÀí·½°¸ | Öğ²½´_ÕJ 1¨C6 | **±£ÊØ£¯˜ËœÊ£¯Éî¶È£¯×ÔÓ†** |
+| ‚ä·İ | ÇåÀíÁ÷³ÌƒÈ ZIP µ½×ÀÃæ | **ªšÁ¢¡¸‚ä·İ¡¹**£¬¿Éº¬ÔO¶¨ ¡À `state.vscdb` |
+| »ÖÍ | ÎÄ¼şÑeÊÖ„Ó `unzip`£¯Ñ}Ñu | **»ÖÍ£¯„h³ı‚ä·İ**£¬¿ÉßxÒ»·İ»ÖÍ»ò¹´ßx¶à·İ„h³ı |
+| °l²¼ | ×ÔĞĞ clone Ä_±¾ | **GitHub Actions** ¶àÆ½Ì¨ Release |
+| Â·½ | ÔøÓ²¾´aÊ¹ÓÃÕßÄ¿ä› | ÒÀÏµ½y½âÎö `%APPDATA%` / Application Support µÈ |
 
-### ç¹¼æ‰¿è‡ªä¸Šæ¸¸çš„æ ¸å¿ƒåƒ¹å€¼
+### À^³Ğ×ÔÉÏÓÎµÄºËĞÄƒrÖµ
 
-- å®‰å…¨åˆ†ç´šæ¸…ç†ï¼ˆå¿«å– â†’ æ­·å² â†’ `state.vscdb`ï¼‰
-- é¸æ–¹æ¡ˆå¾Œç›´æ¥æ¸…ç†ï¼ˆå‚™ä»½èµ°ç¨ç«‹é¸å–®ï¼Œä¸ä¸­é€”å†å•ï¼‰
-- ä¸ç¢°å°ˆæ¡ˆç¨‹å¼ç¢¼èˆ‡å·²å®‰è£æ“´å……æœ¬é«”
+- °²È«·Ö¼‰ÇåÀí£¨¿ìÈ¡ ¡ú švÊ· ¡ú `state.vscdb`£©
+- ßx·½°¸ááÖ±½ÓÇåÀí£¨‚ä·İ×ßªšÁ¢ßx†Î£¬²»ÖĞÍ¾ÔÙ†–£©
+- ²»ÅöŒ£°¸³ÌÊ½´aÅcÒÑ°²Ñb”U³ä±¾ów
 
-### æœ¬å°ˆæ¡ˆé¡å¤–äº®é»ï¼ˆä¸€å¥è©±ï¼‰
+### ±¾Œ£°¸î~ÍâÁÁüc£¨Ò»¾äÔ’£©
 
-> **è·¨å¹³å°ã€é›™æ“Šå°±èƒ½ç”¨çš„æ¸…ç†ï¼‹å‚™ä»½ï¼é¸ä»½æ¢å¾©å·¥å…·ï¼Œé è¨­ç¹ä¸­ï¼ŒRelease ç›´æ¥ä¸‹è¼‰ã€‚**
+> **¿çÆ½Ì¨¡¢ëp“ô¾ÍÄÜÓÃµÄÇåÀí£«‚ä·İ£¯ßx·İ»ÖÍ¹¤¾ß£¬îAÔO·±ÖĞ£¬Release Ö±½ÓÏÂİd¡£**
 
-## å¿«é€Ÿé–‹å§‹ï¼ˆWindowsï¼‰
+## ¿ìËÙé_Ê¼£¨Windows£©
 
-1. é–‹å•Ÿ [Releases](https://github.com/911218sky/vscode-cursor-cleanup/releases)
-2. ä¸‹è¼‰ **`cursor-cleanup.exe`**ï¼ˆæˆ– zip å†è§£å£“ï¼‰
-3. **é›™æ“Š `cursor-cleanup.exe`**
-4. å…ˆé¸èªè¨€ï¼ˆé è¨­ç¹ä¸­ï¼‰â†’ â†‘â†“ + Enter æ“ä½œï¼ˆå¯ã€Œâ† è¿”å›ã€ï¼‰
-5. ä¸»é¸å–®å«ï¼š**æ¸…ç†**ï¼**å‚™ä»½**ï¼**æ¢å¾©**ï¼**å¸è¼‰**ï¼é€€å‡º
-6. **æ¸…ç†**ï¼**å¸è¼‰**éƒ½æœƒå…ˆé¸ç¯„åœï¼š**IDE**ï¼**CLI**ï¼**å…©è€…**
-7. çµæŸå¾Œè¦–æƒ…æ³é—œé–‰è¦–çª—ï¼ˆé¸ã€Œé€€å‡ºã€æœƒç«‹åˆ»çµæŸï¼‰
+1. é_†¢ [Releases](https://github.com/911218sky/vscode-cursor-cleanup/releases)
+2. ÏÂİd **`cursor-cleanup.exe`**£¨»ò zip ÔÙ½â‰º£©
+3. **ëp“ô `cursor-cleanup.exe`**
+4. ÏÈßxÕZÑÔ£¨îAÔO·±ÖĞ£©¡ú ¡ü¡ı + Enter ²Ù×÷£¨¿É¡¸¡û ·µ»Ø¡¹£©
+5. Ö÷ßx†Îº¬£º**ÇåÀí**£¯**‚ä·İ**£¯**»ÖÍ**£¯**Ğ¶İd**£¯ÍË³ö
+6. **ÇåÀí**£¯**Ğ¶İd**¶¼•şÏÈßx¹ ‡ú£º**IDE**£¯**CLI**£¯**ƒÉÕß**
+7. ½YÊøááÒ•Çé›rêPé]Ò•´°£¨ßx¡¸ÍË³ö¡¹•şÁ¢¿Ì½YÊø£©
 
 ## CLI
 
@@ -70,45 +70,45 @@ cursor-cleanup.exe --scan --scope cli
 cursor-cleanup.exe --yes --scope both
 ```
 
-| åƒæ•¸ | èªªæ˜ |
+| …¢”µ | ÕfÃ÷ |
 |------|------|
-| `--lang zh-TW\|zh-CN\|en` | èªè¨€ï¼ˆé è¨­ `zh-TW`ï¼‰ |
-| `--scope ide\|cli\|both` | è³‡æ–™ç¯„åœï¼ˆé è¨­ `both`ï¼‰ |
-| `--scan` | åªæƒæ |
-| `--yes` | è‡ªå‹•æ¸…å®‰å…¨é …ï¼ˆå°æ‡‰ scope è¡Œç¨‹ä¸­æœƒç•¥éï¼‰ |
-| `--no-pause` | çµæŸä¸æš«åœ |
+| `--lang zh-TW\|zh-CN\|en` | ÕZÑÔ£¨îAÔO `zh-TW`£© |
+| `--scope ide\|cli\|both` | ÙYÁÏ¹ ‡ú£¨îAÔO `both`£© |
+| `--scan` | Ö»’ßÃè |
+| `--yes` | ×Ô„ÓÇå°²È«í—£¨Œ¦‘ª scope ĞĞ³ÌÖĞ•şÂÔß^£© |
+| `--no-pause` | ½YÊø²»•ºÍ£ |
 
-### å¸è¼‰ï¼ˆTUIï¼‰
+### Ğ¶İd£¨TUI£©
 
-ä¸»é¸å–® â†’ **å¸è¼‰ Cursor / CLI** â†’ é¸ **IDE**ï¼**CLI**ï¼**å…©è€…**ï¼ˆéœ€å†ç¢ºèªï¼‰ã€‚å¸è¼‰ IDE æ™‚ Windows æœƒè«‹æ±‚ç®¡ç†å“¡ï¼ˆUACï¼‰ï¼Œå…ˆå•Ÿå‹•å®˜æ–¹ `Uninstall.exe`ï¼Œå†æ¸… `%APPDATA%\Cursor` ç­‰ï¼›åªå¸è¼‰ CLI æ™‚æ¸… `~/.cursor`ã€`cursor-agent` èˆ‡ PATHï¼Œä¸å‹• IDEã€‚**ä¸åˆª**å„å°ˆæ¡ˆç›®éŒ„å…§çš„ `.cursor/`ã€‚
+Ö÷ßx†Î ¡ú **Ğ¶İd Cursor / CLI** ¡ú ßx **IDE**£¯**CLI**£¯**ƒÉÕß**£¨ĞèÔÙ´_ÕJ£©¡£Ğ¶İd IDE •r Windows •şÕˆÇó¹ÜÀí†T£¨UAC£©£¬ÏÈ†¢„Ó¹Ù·½ `Uninstall.exe`£¬ÔÙÇå `%APPDATA%\Cursor` µÈ£»Ö»Ğ¶İd CLI •rÇå `~/.cursor`¡¢`cursor-agent` Åc PATH£¬²»„Ó IDE¡£**²»„h**¸÷Œ£°¸Ä¿ä›ƒÈµÄ `.cursor/`¡£
 
-## æ¸…ä»€éº¼ï¼Ÿ
+## ÇåÊ²üN£¿
 
-| é¢¨éšª | å…§å®¹ |
+| ïLëU | ƒÈÈİ |
 |------|------|
-| å®‰å…¨ | CachedDataã€æ“´å……å¿«å–ã€GPU/Cacheã€logsã€**Agent CLI å¿«å–**ï¼ˆ`~/.cursor`ï¼‰ |
-| ä¸­ç­‰ | æœ¬æ©Ÿç·¨è¼¯æ­·å² Historyã€**Agent CLI ç‹€æ…‹ / chats / projects** |
-| é«˜å± | `state.vscdb`ï¼ˆAI èŠå¤©ï¼æœ€è¿‘æª”æ¡ˆï¼UIï¼‰ã€**Agent CLI ç™»å…¥ `auth.json`** |
+| °²È« | CachedData¡¢”U³ä¿ìÈ¡¡¢GPU/Cache¡¢logs¡¢**Agent CLI ¿ìÈ¡**£¨`~/.cursor`£© |
+| ÖĞµÈ | ±¾™C¾İ‹švÊ· History¡¢**Agent CLI  î‘B / chats / projects** |
+| ¸ßÎ£ | `state.vscdb`£¨AI ÁÄÌì£¯×î½ü™n°¸£¯UI£©¡¢**Agent CLI µÇÈë `auth.json`** |
 
-ä¸€èˆ¬ã€Œæ¸…ç†ã€ä¸åˆªï¼šå°ˆæ¡ˆç¨‹å¼ç¢¼ã€å·²å®‰è£æ“´å……æœ¬é«”ã€Agent CLI å®‰è£ç›®éŒ„ã€‚**å¸è¼‰**å¯ä¾é¸æ“‡ç§»é™¤ IDE èˆ‡ï¼æˆ– CLI å®‰è£èˆ‡ä½¿ç”¨è€…è³‡æ–™ï¼ˆè¦‹ä¸Šï¼‰ã€‚
+Ò»°ã¡¸ÇåÀí¡¹²»„h£ºŒ£°¸³ÌÊ½´a¡¢ÒÑ°²Ñb”U³ä±¾ów¡¢Agent CLI °²ÑbÄ¿ä›¡£**Ğ¶İd**¿ÉÒÀßx“ñÒÆ³ı IDE Åc£¯»ò CLI °²ÑbÅcÊ¹ÓÃÕßÙYÁÏ£¨ÒŠÉÏ£©¡£
 
-å¼·åˆ¶é—œé–‰åªçµæŸæ‰€é¸ç¯„åœè¡Œç¨‹ï¼›å®Œæ•´ã€Œå…©è€…ã€å‚™ä»½å« `auth.json`ã€‚
+ŠÖÆêPé]Ö»½YÊøËùßx¹ ‡úĞĞ³Ì£»ÍêÕû¡¸ƒÉÕß¡¹‚ä·İº¬ `auth.json`¡£
 
-## æ–‡ä»¶
+## ÎÄ¼ş
 
-- [docs/guide.md](./docs/guide.md) â€” è‹±æ–‡å®Œæ•´æŒ‡å—
+- [docs/guide.md](./docs/guide.md) ¡ª Ó¢ÎÄÍêÕûÖ¸ÄÏ
 - [README.en.md](./README.en.md) / [README.zh-CN.md](./README.zh-CN.md)
 
-## å»ºç½®
+## ½¨ÖÃ
 
 ```bash
 cargo build --release
-# Windowsï¼šè¤‡è£½åˆ° dist\
+# Windows£ºÑ}Ñuµ½ dist\
 mkdir -p dist 2>nul & copy /Y target\release\cursor-cleanup.exe dist\
 ```
 
-## æˆæ¬Š
+## ÊÚ™à
 
-MIT â€” [LICENSE](LICENSE)  
-åŸä½œè€… [ThendCN](https://github.com/ThendCN)ï¼›æœ¬å€‰åº« [911218sky](https://github.com/911218sky)ã€‚
+MIT ¡ª [LICENSE](LICENSE)  
+Ô­×÷Õß [ThendCN](https://github.com/ThendCN)£»±¾‚}ì [911218sky](https://github.com/911218sky)¡£
 

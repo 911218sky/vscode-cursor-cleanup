@@ -57,6 +57,43 @@ impl DataScope {
     }
 }
 
+impl TargetKind {
+    /// IDE process may lock these paths (`auth.json` lives under the IDE data dir).
+    pub fn needs_ide_process(self) -> bool {
+        matches!(
+            self,
+            Self::CachedData
+                | Self::ExtVsix
+                | Self::Gpu
+                | Self::Logs
+                | Self::History
+                | Self::State
+                | Self::AgentCliAuth
+        )
+    }
+
+    /// Agent CLI process may lock these paths.
+    pub fn needs_cli_process(self) -> bool {
+        matches!(
+            self,
+            Self::AgentCliCache | Self::AgentCliState | Self::AgentCliAuth
+        )
+    }
+}
+
+/// Process / unlock scope implied by the targets about to be cleaned.
+/// `AgentCliAuth` requires both IDE and CLI (file under IDE dir, used by agent).
+pub fn lock_scope_for_kinds(kinds: &[TargetKind]) -> DataScope {
+    let ide = kinds.iter().any(|k| k.needs_ide_process());
+    let cli = kinds.iter().any(|k| k.needs_cli_process());
+    match (ide, cli) {
+        (true, true) => DataScope::Both,
+        (true, false) => DataScope::Ide,
+        (false, true) => DataScope::Cli,
+        (false, false) => DataScope::Both,
+    }
+}
+
 impl Editor {
     pub fn display_name(self) -> &'static str {
         "Cursor"
@@ -411,6 +448,28 @@ mod tests {
         assert_eq!(DataScope::parse("CLI"), Some(DataScope::Cli));
         assert_eq!(DataScope::parse("both"), Some(DataScope::Both));
         assert_eq!(DataScope::parse("nope"), None);
+    }
+
+    #[test]
+    fn lock_scope_from_kinds() {
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::CachedData]),
+            DataScope::Ide
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::AgentCliCache]),
+            DataScope::Cli
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::AgentCliAuth]),
+            DataScope::Both
+        );
+        assert_eq!(
+            lock_scope_for_kinds(&[TargetKind::State, TargetKind::AgentCliAuth]),
+            DataScope::Both
+        );
+        assert!(TargetKind::AgentCliAuth.needs_ide_process());
+        assert!(TargetKind::AgentCliAuth.needs_cli_process());
     }
 
     #[test]
