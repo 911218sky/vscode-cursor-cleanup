@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![Lang](https://img.shields.io/badge/UI-zh--TW%20%7C%20zh--CN%20%7C%20en-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.2-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.3-brightgreen.svg)
 
 **雙擊即可用的互動清理工具** · 也支援 CLI  
 預設介面：**繁體中文**（可切換簡體／English）
@@ -57,7 +57,8 @@
 3. **雙擊 `cursor-cleanup.exe`**
 4. 先選語言（預設繁中）→ ↑↓ + Enter 操作（可「← 返回」）
 5. 主選單含：**清理**／**備份**／**恢復**／**卸載**／退出
-6. 結束後視情況關閉視窗（選「退出」會立刻結束）
+6. **清理**／**卸載**都會先選範圍：**IDE**／**CLI**／**兩者**
+7. 結束後視情況關閉視窗（選「退出」會立刻結束）
 
 ## CLI
 

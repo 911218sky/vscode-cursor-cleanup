@@ -1,6 +1,6 @@
 ﻿# cursor-cleanup User Guide
 
-Version: **v0.5.2** (Cursor-only; uninstall IDE / CLI / both + confirm before force-quit / restore)
+Version: **v0.5.3** (Cursor-only; clean/uninstall pick IDE / CLI / both + confirm before force-quit / restore)
 
 UI languages: **Traditional Chinese (default)**, Simplified Chinese, English  
 (`--lang zh-TW|zh-CN|en`)
@@ -33,11 +33,11 @@ Same mission, but **Cursor-only**: safe tiered cleanup without touching project 
 4. Pick language (default Traditional Chinese)
 5. Use **mouse click** or **↑↓ + Enter**; each step has **Esc / ← Back**
 6. Main menu:
-   - **Clean** — caches / history / state.vscdb
+   - **Clean** — pick IDE / CLI / both, then caches / history / state.vscdb (or CLI equivalents)
    - **Backup** — config only, or config + `state.vscdb` (recommended)
    - **Restore / delete** — restore one backup, or multi-select delete under `backups/`
    - **Uninstall** — pick IDE / CLI / both; IDE uses official Uninstall.exe (Windows, may request UAC) then wipes leftovers for that scope
-7. For Clean, choose a plan:
+7. For Clean, after choosing scope, pick a plan:
    - **Conservative** — safe caches only
    - **Standard** — safe + edit history
    - **Deep** — includes `state.vscdb`

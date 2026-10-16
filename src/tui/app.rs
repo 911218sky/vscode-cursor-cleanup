@@ -1,12 +1,12 @@
 use crate::backup::{self, sanitize_backup_name, BackupInfo};
 use crate::cleanup::{
-    collect_stats, force_quit_editor, is_editor_running, launch_editor, run_target,
-    sum_target_sizes, wait_until_data_unlocked, TargetStat,
+    collect_stats_for, force_quit_scope, is_editor_running, is_scope_running, launch_editor,
+    run_target, sum_target_sizes, wait_until_scope_unlocked, TargetStat,
 };
 use crate::cursor_version;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
-use crate::paths::{plan_target_indices, DataScope, Editor, Risk};
+use crate::paths::{plan_target_indices, DataScope, Editor, Risk, TargetKind};
 use crate::uninstall;
 use crate::tui::widgets::{
     checkbox_items, draw_banner, draw_confirm, draw_input_field, draw_progress, draw_scan_table,
@@ -39,6 +39,7 @@ pub enum StatusMsg {
 enum PendingWork {
     ExecuteClean {
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -59,9 +60,10 @@ enum ConfirmAction {
         /// Current Cursor is older than the version stamped on this backup.
         version_downgrade: bool,
     },
-    /// Extra confirm before cleaning High-risk targets (state.vscdb).
+    /// Extra confirm before cleaning High-risk targets (state.vscdb / auth.json).
     Clean {
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -69,6 +71,7 @@ enum ConfirmAction {
     },
     ForceQuit {
         editor: Editor,
+        scope: DataScope,
         then: Box<PendingWork>,
     },
     /// Wipe Cursor IDE and/or Agent CLI (install + leftovers).
@@ -79,8 +82,11 @@ enum ConfirmAction {
 enum Screen {
     Language,
     MainMenu,
+    /// Pick IDE / CLI / both before scanning cleanup targets.
+    CleanScope,
     ScanAndPlan {
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -89,6 +95,7 @@ enum Screen {
     },
     CustomClean {
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -118,11 +125,13 @@ enum Screen {
     /// Shown for one frame before the blocking force-quit so the UI is not silent.
     ForceQuitting {
         editor: Editor,
+        scope: DataScope,
         then: Box<PendingWork>,
         return_to: Box<Screen>,
     },
     Scanning {
         editor: Editor,
+        scope: DataScope,
     },
     Progress {
         editor: Editor,
@@ -203,11 +212,11 @@ impl App {
     }
 
     fn tick_force_quitting(&mut self) {
-        let editor = match &self.screen {
-            Screen::ForceQuitting { editor, .. } => *editor,
+        let (editor, scope) = match &self.screen {
+            Screen::ForceQuitting { editor, scope, .. } => (*editor, *scope),
             _ => return,
         };
-        if self.do_force_quit(editor) {
+        if self.do_force_quit(editor, scope) {
             let then = match std::mem::replace(&mut self.screen, Screen::MainMenu) {
                 Screen::ForceQuitting { then, .. } => then,
                 other => {
@@ -231,25 +240,25 @@ impl App {
     }
 
     fn tick_scanning(&mut self) {
-        let editor = match &self.screen {
-            Screen::Scanning { editor } => *editor,
+        let (editor, scope) = match &self.screen {
+            Screen::Scanning { editor, scope } => (*editor, *scope),
             _ => return,
         };
         if self.frame < self.scan_at {
             return;
         }
-        if let Some((root, total, stats)) = collect_stats(editor) {
+        if let Some((root, total, stats)) = collect_stats_for(editor, scope) {
             if root.exists() {
-                self.screen = Self::scan_screen(editor, root, total, stats);
+                self.screen = Self::scan_screen(editor, scope, root, total, stats);
                 self.reset_list(5);
                 return;
             }
             self.status = StatusMsg::Warn(i18n::fmt_no_dir(
-                editor.display_name(),
+                i18n::scope_short(scope),
                 &root.display().to_string(),
             ));
         } else {
-            self.status = StatusMsg::Warn(i18n::fmt_no_resolve(editor.display_name()));
+            self.status = StatusMsg::Warn(i18n::fmt_no_resolve(i18n::scope_short(scope)));
         }
         self.screen = Screen::MainMenu;
         self.reset_list(MAIN_MENU_LEN);
@@ -405,21 +414,40 @@ impl App {
         })
     }
 
+    fn selection_high_kinds(stats: &[TargetStat], selected: &[usize]) -> (bool, bool) {
+        let mut has_state = false;
+        let mut has_auth = false;
+        for &i in selected {
+            let Some(s) = stats.get(i) else {
+                continue;
+            };
+            match s.target.kind {
+                TargetKind::State => has_state = true,
+                TargetKind::AgentCliAuth => has_auth = true,
+                _ => {}
+            }
+        }
+        (has_state, has_auth)
+    }
+
     /// Start a clean after optional deep-confirm and force-quit confirm.
     fn begin_clean(
         &mut self,
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
         selected: Vec<usize>,
     ) {
         if Self::selection_includes_high(&stats, &selected) {
+            let (has_state, has_auth) = Self::selection_high_kinds(&stats, &selected);
             let return_to = self.screen.clone();
             self.screen = Screen::Confirm {
-                prompt: t(Msg::ConfirmDeepClean).to_string(),
+                prompt: i18n::confirm_deep_clean(has_state, has_auth).to_string(),
                 action: ConfirmAction::Clean {
                     editor,
+                    scope,
                     root,
                     total,
                     stats,
@@ -430,12 +458,13 @@ impl App {
             self.reset_list(2);
             return;
         }
-        self.proceed_clean(editor, root, total, stats, selected);
+        self.proceed_clean(editor, scope, root, total, stats, selected);
     }
 
     fn proceed_clean(
         &mut self,
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -443,18 +472,20 @@ impl App {
     ) {
         let then = PendingWork::ExecuteClean {
             editor,
+            scope,
             root: root.clone(),
             total,
             stats: stats.clone(),
             selected: selected.clone(),
         };
-        if self.ensure_editor_or_confirm(editor, then) {
-            self.execute_clean(editor, root, total, stats, selected);
+        if self.ensure_scope_or_confirm(editor, scope, then) {
+            self.execute_clean(editor, scope, root, total, stats, selected);
         }
     }
 
     fn scan_screen(
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
@@ -462,6 +493,7 @@ impl App {
         let plan_labels = Self::plan_labels_for(&stats);
         Screen::ScanAndPlan {
             editor,
+            scope,
             root,
             total,
             stats,
@@ -532,7 +564,7 @@ impl App {
                 t(Msg::BackupConfigState).to_string(),
                 t(Msg::Back).to_string(),
             ],
-            Screen::UninstallScope => vec![
+            Screen::CleanScope | Screen::UninstallScope => vec![
                 t(Msg::ScopeIde).to_string(),
                 t(Msg::ScopeCli).to_string(),
                 t(Msg::ScopeBoth).to_string(),
@@ -567,18 +599,29 @@ impl App {
         }
     }
 
-    /// If the editor is not running, returns true so the caller can proceed.
-    /// If it is running, shows a confirm dialog and returns false (caller must wait).
-    fn ensure_editor_or_confirm(&mut self, editor: Editor, then: PendingWork) -> bool {
-        if !is_editor_running(editor) {
+    /// If processes for `scope` are not running, returns true so the caller can proceed.
+    /// If running, shows a confirm dialog and returns false (caller must wait).
+    fn ensure_scope_or_confirm(
+        &mut self,
+        editor: Editor,
+        scope: DataScope,
+        then: PendingWork,
+    ) -> bool {
+        if !is_scope_running(editor, scope) {
             return true;
         }
         let return_to = self.screen.clone();
-        self.status = StatusMsg::Warn(i18n::fmt_running(editor.display_name()));
+        self.status = StatusMsg::Warn(i18n::fmt_running_scope(scope));
+        let name = match scope {
+            DataScope::Ide => "Cursor IDE",
+            DataScope::Cli => "Agent CLI",
+            DataScope::Both => editor.display_name(),
+        };
         self.screen = Screen::Confirm {
-            prompt: format!("{} {}", editor.display_name(), t(Msg::ConfirmForceQuit)),
+            prompt: format!("{name} {}", t(Msg::ConfirmForceQuit)),
             action: ConfirmAction::ForceQuit {
                 editor,
+                scope,
                 then: Box::new(then),
             },
             return_to: Box::new(return_to),
@@ -587,13 +630,13 @@ impl App {
         false
     }
 
-    fn do_force_quit(&mut self, editor: Editor) -> bool {
-        let ok = force_quit_editor(editor, true);
+    fn do_force_quit(&mut self, editor: Editor, scope: DataScope) -> bool {
+        let ok = force_quit_scope(editor, scope, true);
         if ok {
             self.status = StatusMsg::Ok(format!(
                 "{} {}",
                 t(Msg::ForceQuitOk),
-                editor.display_name()
+                i18n::scope_short(scope)
             ));
         } else {
             self.relaunch_after = false;
@@ -631,12 +674,13 @@ impl App {
         match work {
             PendingWork::ExecuteClean {
                 editor,
+                scope,
                 root,
                 total,
                 stats,
                 selected,
             } => {
-                self.execute_clean(editor, root, total, stats, selected);
+                self.execute_clean(editor, scope, root, total, stats, selected);
             }
             PendingWork::Restore(info) => {
                 self.do_restore(info);
@@ -653,8 +697,9 @@ impl App {
 
     /// Entry point for restore — always checks / confirms force-quit first.
     fn start_restore(&mut self, info: BackupInfo) {
-        if !self.ensure_editor_or_confirm(
+        if !self.ensure_scope_or_confirm(
             Editor::Cursor,
+            DataScope::Both,
             PendingWork::Restore(info.clone()),
         ) {
             return;
@@ -705,8 +750,9 @@ impl App {
 
     fn run_backup(&mut self, include_state: bool, custom_name: Option<String>) {
         let editor = Editor::Cursor;
-        if !self.ensure_editor_or_confirm(
+        if !self.ensure_scope_or_confirm(
             editor,
+            DataScope::Both,
             PendingWork::Backup {
                 include_state,
                 custom_name: custom_name.clone(),
@@ -745,9 +791,10 @@ impl App {
         self.reset_list(MAIN_MENU_LEN);
     }
 
-    fn start_clean(&mut self) {
+    fn start_clean(&mut self, scope: DataScope) {
         self.screen = Screen::Scanning {
             editor: Editor::Cursor,
+            scope,
         };
         self.scan_at = self.frame + 6;
     }
@@ -783,13 +830,14 @@ impl App {
     fn execute_clean(
         &mut self,
         editor: Editor,
+        scope: DataScope,
         root: PathBuf,
         total: u64,
         stats: Vec<TargetStat>,
         selected: Vec<usize>,
     ) {
         // Process may already be gone without force-quit — still wait for locks.
-        if !wait_until_data_unlocked(editor, true) {
+        if !wait_until_scope_unlocked(editor, scope, true) {
             self.relaunch_after = false;
             self.status = StatusMsg::Warn(t(Msg::DataStillLocked).to_string());
             self.screen = Screen::MainMenu;
@@ -818,7 +866,7 @@ impl App {
             Screen::ScanAndPlan { .. } => MenuScreen::Plan,
             Screen::CustomClean { .. } => MenuScreen::CustomClean,
             Screen::BackupMode => MenuScreen::BackupMode,
-            Screen::UninstallScope => MenuScreen::PickScope,
+            Screen::CleanScope | Screen::UninstallScope => MenuScreen::PickScope,
             Screen::RestoreManage { .. } => MenuScreen::RestoreManage,
             Screen::Confirm { .. } => MenuScreen::Confirm,
             _ => MenuScreen::Generic,
@@ -838,7 +886,10 @@ impl App {
                 self.reset_list(MAIN_MENU_LEN);
             }
             Screen::MainMenu => match idx {
-                0 => self.start_clean(),
+                0 => {
+                    self.screen = Screen::CleanScope;
+                    self.reset_list(4);
+                }
                 1 => {
                     self.screen = Screen::BackupMode;
                     self.reset_list(3);
@@ -849,6 +900,15 @@ impl App {
                     self.reset_list(4);
                 }
                 _ => self.should_quit = true,
+            },
+            Screen::CleanScope => match idx {
+                0 => self.start_clean(DataScope::Ide),
+                1 => self.start_clean(DataScope::Cli),
+                2 => self.start_clean(DataScope::Both),
+                _ => {
+                    self.screen = Screen::MainMenu;
+                    self.reset_list(MAIN_MENU_LEN);
+                }
             },
             Screen::UninstallScope => match idx {
                 0 => self.confirm_uninstall(DataScope::Ide),
@@ -861,25 +921,28 @@ impl App {
             },
             Screen::ScanAndPlan {
                 editor,
+                scope,
                 root,
                 total,
                 stats,
                 ..
             } => {
                 let editor = *editor;
+                let scope = *scope;
                 let root = root.clone();
                 let total = *total;
                 let stats = stats.clone();
                 // Labels: 0 conservative, 1 standard, 2 deep, 3 custom, 4 back
                 if idx == 4 {
-                    self.screen = Screen::MainMenu;
-                    self.reset_list(MAIN_MENU_LEN);
+                    self.screen = Screen::CleanScope;
+                    self.reset_list(4);
                     return;
                 }
                 if idx == 3 {
                     // Browse custom items without quitting; confirm quit when cleaning starts.
                     self.screen = Screen::CustomClean {
                         editor,
+                        scope,
                         root,
                         total,
                         stats,
@@ -894,12 +957,13 @@ impl App {
                         self.screen = Screen::MainMenu;
                         self.reset_list(MAIN_MENU_LEN);
                     } else {
-                        self.begin_clean(editor, root, total, stats, sel);
+                        self.begin_clean(editor, scope, root, total, stats, sel);
                     }
                 }
             }
             Screen::CustomClean {
                 editor,
+                scope,
                 root,
                 total,
                 stats,
@@ -907,6 +971,7 @@ impl App {
                 selected,
             } => {
                 let editor = *editor;
+                let scope = *scope;
                 let root = root.clone();
                 let total = *total;
                 let stats = stats.clone();
@@ -919,7 +984,7 @@ impl App {
                     }
                     1 => item_idx += 1,
                     _ => {
-                        self.screen = Self::scan_screen(editor, root, total, stats);
+                        self.screen = Self::scan_screen(editor, scope, root, total, stats);
                         self.reset_list(5);
                         return;
                     }
@@ -927,14 +992,15 @@ impl App {
                 if item_idx >= stats.len() {
                     if selected.is_empty() {
                         self.status = StatusMsg::Dim(t(Msg::NothingSelected).to_string());
-                        self.screen = Self::scan_screen(editor, root, total, stats);
+                        self.screen = Self::scan_screen(editor, scope, root, total, stats);
                         self.reset_list(5);
                     } else {
                         // Return to plan on cancel — not the last custom item
                         // (re-confirming Clean there would duplicate the last index).
-                        self.screen = Self::scan_screen(editor, root.clone(), total, stats.clone());
+                        self.screen =
+                            Self::scan_screen(editor, scope, root.clone(), total, stats.clone());
                         self.reset_list(5);
-                        self.begin_clean(editor, root, total, stats, selected);
+                        self.begin_clean(editor, scope, root, total, stats, selected);
                     }
                 } else {
                     let default = if matches!(stats[item_idx].target.risk, Risk::Safe)
@@ -946,6 +1012,7 @@ impl App {
                     };
                     self.screen = Screen::CustomClean {
                         editor,
+                        scope,
                         root,
                         total,
                         stats,
@@ -1078,19 +1145,23 @@ impl App {
                     }
                     ConfirmAction::Clean {
                         editor,
+                        scope,
                         root,
                         total,
                         stats,
                         selected,
                     } => {
-                        self.proceed_clean(editor, root, total, stats, selected);
+                        self.proceed_clean(editor, scope, root, total, stats, selected);
                     }
-                    ConfirmAction::ForceQuit { editor, then } => {
+                    ConfirmAction::ForceQuit { editor, scope, then } => {
                         // Draw once, then tick_force_quitting() performs the (blocking) kill.
-                        self.relaunch_after = true;
-                        self.status = StatusMsg::Warn(t(Msg::ForceQuitting).to_string());
+                        // Only relaunch IDE when we actually force-quit it.
+                        self.relaunch_after = scope.includes_ide();
+                        self.status =
+                            StatusMsg::Warn(i18n::force_quitting_label(scope).to_string());
                         self.screen = Screen::ForceQuitting {
                             editor,
+                            scope,
                             then,
                             return_to,
                         };
@@ -1305,16 +1376,18 @@ impl App {
                 Screen::MainMenu
             }
             Screen::Scanning { .. }
-            | Screen::ScanAndPlan { .. }
+            | Screen::CleanScope
             | Screen::BackupMode
             | Screen::UninstallScope => Screen::MainMenu,
+            Screen::ScanAndPlan { .. } => Screen::CleanScope,
             Screen::CustomClean {
                 editor,
+                scope,
                 root,
                 total,
                 stats,
                 ..
-            } => Self::scan_screen(editor, root, total, stats),
+            } => Self::scan_screen(editor, scope, root, total, stats),
             Screen::BackupName { .. } => return,
             Screen::RestoreManage { .. } => Screen::MainMenu,
             Screen::RestorePick { backups } | Screen::DeleteMulti { backups } => {
@@ -1354,7 +1427,7 @@ impl App {
         draw_banner(f, chunks[0], t(Msg::MainMenu), frame, animate_banner);
 
         match &self.screen {
-            Screen::Scanning { editor } => {
+            Screen::Scanning { editor, .. } => {
                 self.list_hit_area = Rect::default();
                 draw_scanning(f, chunks[1], *editor, frame);
             }
@@ -1468,9 +1541,9 @@ impl App {
                 self.list_hit_area = Rect::default();
                 draw_progress(f, chunks[1], log, *step, selected.len(), frame);
             }
-            Screen::ForceQuitting { .. } => {
+            Screen::ForceQuitting { scope, .. } => {
                 self.list_hit_area = Rect::default();
-                draw_confirm(f, chunks[1], t(Msg::ForceQuitting), frame);
+                draw_confirm(f, chunks[1], i18n::force_quitting_label(*scope), frame);
             }
             Screen::Confirm { prompt, .. } => {
                 let confirm_area = Rect {
@@ -1500,6 +1573,7 @@ impl App {
                     Screen::Language => t(Msg::PickLang),
                     Screen::MainMenu => t(Msg::MainMenu),
                     Screen::BackupMode => t(Msg::BackupMode),
+                    Screen::CleanScope => t(Msg::PickScope),
                     Screen::UninstallScope => t(Msg::PickUninstall),
                     Screen::RestoreManage { .. } => t(Msg::BackupManage),
                     Screen::RestorePick { .. } => t(Msg::PickBackup),

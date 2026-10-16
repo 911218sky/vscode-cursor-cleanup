@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.2-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.3-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
@@ -54,6 +54,7 @@ This project is **Cursor-only** and adds:
 3. **Double-click `cursor-cleanup.exe`**
 4. Pick language → use ↑↓ + Enter (Back available)
 5. Main menu: **Clean** / **Backup** / **Restore** / **Uninstall** / Exit
+6. **Clean** and **Uninstall** both ask for scope first: **IDE** / **CLI** / **Both**
 
 ## CLI
 
