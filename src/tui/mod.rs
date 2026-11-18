@@ -85,10 +85,18 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
                 elevated
             })?;
             app.on_elevate_finished(req, ok);
-            // Drop leftover input from before suspend.
+            // Drop leftover input / resize events from before or during UAC.
             while event::poll(Duration::ZERO).unwrap_or(false) {
                 let _ = event::read();
             }
+            // Critical: reset ratatui's diff buffer, then paint a full frame.
+            // Without this, the blank alt-screen only receives sparse cell updates.
+            if let Ok(size) = terminal.size() {
+                let area = ratatui::layout::Rect::new(0, 0, size.width, size.height);
+                let _ = terminal.resize(area);
+            }
+            terminal.clear()?;
+            terminal.draw(|f| app.draw(f))?;
         }
     }
 

@@ -3,7 +3,7 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.6-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.7-brightgreen.svg)
 
 **Double-click interactive cleaner** · also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
