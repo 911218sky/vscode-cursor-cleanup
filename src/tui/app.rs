@@ -4,7 +4,9 @@ use crate::cleanup::{
     process_scope_for_stats, run_target, scope_data_available, sum_target_sizes,
     wait_until_scope_unlocked, TargetStat,
 };
+use crate::cursor_settings;
 use crate::cursor_version;
+use crate::elevate;
 use crate::fsutil::fmt_size;
 use crate::i18n::{self, t, Lang, Msg};
 use crate::paths::{plan_target_indices, DataScope, Editor, Risk, TargetKind};
@@ -25,7 +27,15 @@ use std::path::PathBuf;
 use tui_input::Input;
 use tui_input::InputRequest;
 
-const MAIN_MENU_LEN: usize = 5;
+const MAIN_MENU_LEN: usize = 7;
+const VERSION_MENU_LEN: usize = 3;
+
+/// UAC elevation request handled by `tui::run` (suspend TUI → elevate → resume).
+#[derive(Clone, Debug)]
+pub enum ElevateRequest {
+    SetVersion(String),
+    RestoreVersion,
+}
 
 #[derive(Clone)]
 pub enum StatusMsg {
@@ -109,6 +119,10 @@ enum Screen {
     BackupName {
         include_state: bool,
     },
+    /// Pick set / restore / back for Cursor install version fields.
+    VersionMenu,
+    /// Type a new major.minor.patch for product.json + package.json.
+    VersionInput,
     RestoreManage {
         backups: Vec<BackupInfo>,
     },
@@ -164,6 +178,8 @@ pub struct App {
     pub elevate_uninstall: bool,
     /// Scope chosen for uninstall (IDE / CLI / both).
     pub uninstall_scope: DataScope,
+    /// Mid-session UAC for version write (Program Files); cleared by `tui::run`.
+    pub pending_elevate: Option<ElevateRequest>,
     /// Set when the user confirmed force-quit; relaunch Cursor after successful work.
     relaunch_after: bool,
     list_hit_area: Rect,
@@ -189,11 +205,66 @@ impl App {
             run_uninstall: false,
             elevate_uninstall: false,
             uninstall_scope: DataScope::Both,
+            pending_elevate: None,
             relaunch_after: false,
             list_hit_area: Rect::default(),
             frame: 0,
             scan_at: 0,
         }
+    }
+
+    pub fn take_elevate_request(&mut self) -> Option<ElevateRequest> {
+        self.pending_elevate.take()
+    }
+
+    /// Apply result after mid-session UAC for version change.
+    pub fn on_elevate_finished(&mut self, req: ElevateRequest, ok: bool) {
+        if !ok {
+            self.status = StatusMsg::Warn(t(Msg::VersionElevateCancel).to_string());
+            self.show_version_menu_keep_status();
+            return;
+        }
+        match req {
+            ElevateRequest::SetVersion(ver) => match cursor_version::read_installed_versions() {
+                Some((p, k)) if p == ver || k == ver => {
+                    self.status = StatusMsg::Ok(format!(
+                        "{} — {} — {}",
+                        t(Msg::VersionElevateOk),
+                        i18n::fmt_version_current(&p, &k),
+                        t(Msg::VersionRestartHint)
+                    ));
+                    self.did_work = true;
+                }
+                Some((p, k)) => {
+                    // Elevated process reported success but disk still differs (rare).
+                    self.status = StatusMsg::Warn(format!(
+                        "{} — {}",
+                        t(Msg::VersionFail),
+                        i18n::fmt_version_current(&p, &k)
+                    ));
+                }
+                None => {
+                    self.status = StatusMsg::Ok(t(Msg::VersionElevateOk).to_string());
+                    self.did_work = true;
+                }
+            },
+            ElevateRequest::RestoreVersion => match cursor_version::read_installed_versions() {
+                Some((p, k)) => {
+                    self.status = StatusMsg::Ok(format!(
+                        "{} — {} — {}",
+                        t(Msg::VersionElevateOk),
+                        i18n::fmt_version_current(&p, &k),
+                        t(Msg::VersionRestartHint)
+                    ));
+                    self.did_work = true;
+                }
+                None => {
+                    self.status = StatusMsg::Ok(t(Msg::VersionElevateOk).to_string());
+                    self.did_work = true;
+                }
+            },
+        }
+        self.show_version_menu_keep_status();
     }
 
     pub fn tick(&mut self) {
@@ -546,8 +617,15 @@ impl App {
                 t(Msg::MenuClean).to_string(),
                 t(Msg::MenuBackup).to_string(),
                 t(Msg::MenuRestore).to_string(),
+                t(Msg::MenuSetVersion).to_string(),
+                t(Msg::MenuDisableUpdates).to_string(),
                 t(Msg::MenuUninstall).to_string(),
                 t(Msg::Exit).to_string(),
+            ],
+            Screen::VersionMenu => vec![
+                t(Msg::VersionSetNew).to_string(),
+                t(Msg::VersionRestoreBak).to_string(),
+                t(Msg::Back).to_string(),
             ],
             Screen::ScanAndPlan { plan_labels, .. } => plan_labels.clone(),
             Screen::CustomClean { stats, idx, .. } => {
@@ -872,6 +950,7 @@ impl App {
             Screen::BackupMode => MenuScreen::BackupMode,
             Screen::CleanScope | Screen::UninstallScope => MenuScreen::PickScope,
             Screen::RestoreManage { .. } => MenuScreen::RestoreManage,
+            Screen::VersionMenu => MenuScreen::VersionMenu,
             Screen::Confirm { .. } => MenuScreen::Confirm,
             _ => MenuScreen::Generic,
         }
@@ -899,12 +978,25 @@ impl App {
                     self.reset_list(3);
                 }
                 2 => self.open_restore_manage(),
-                3 => {
+                3 => self.open_version_menu(),
+                4 => self.run_disable_updates(),
+                5 => {
                     self.screen = Screen::UninstallScope;
                     self.reset_list(4);
                 }
                 _ => self.should_quit = true,
             },
+            Screen::VersionMenu => match idx {
+                0 => self.open_version_input(),
+                1 => {
+                    self.run_restore_version();
+                }
+                _ => {
+                    self.screen = Screen::MainMenu;
+                    self.reset_list(MAIN_MENU_LEN);
+                }
+            },
+            Screen::VersionInput => {}
             Screen::CleanScope => match idx {
                 0 => self.start_clean(DataScope::Ide),
                 1 => self.start_clean(DataScope::Cli),
@@ -1245,6 +1337,7 @@ impl App {
             // Ignore input while force-quit is in flight (Esc already blocked in handle_back).
             Screen::ForceQuitting { .. } => return,
             Screen::BackupName { .. } => self.handle_name_key(key),
+            Screen::VersionInput => self.handle_version_key(key),
             Screen::DeleteMulti { backups } => {
                 let len = backups.len() + 1;
                 match key.code {
@@ -1362,6 +1455,165 @@ impl App {
         }
     }
 
+    fn run_disable_updates(&mut self) {
+        match cursor_settings::disable_updates() {
+            Ok(r) if !r.changed => {
+                self.status = StatusMsg::Ok(format!(
+                    "{}  —  {}",
+                    t(Msg::UpdatesAlreadyOff),
+                    i18n::fmt_updates_status(Some(&r.mode), Some(r.win_bg))
+                ));
+                self.did_work = true;
+            }
+            Ok(r) => {
+                self.status = StatusMsg::Ok(format!(
+                    "{}  —  {}",
+                    i18n::fmt_updates_disabled(&r.path.display().to_string()),
+                    t(Msg::UpdatesRestartHint)
+                ));
+                self.did_work = true;
+            }
+            Err(cursor_settings::DisableUpdatesError::NoDataDir) => {
+                self.status = StatusMsg::Warn(t(Msg::UpdatesSettingsMissing).to_string());
+            }
+            Err(e) => {
+                self.status =
+                    StatusMsg::Warn(format!("{}: {}", t(Msg::UpdatesFail), e.detail()));
+            }
+        }
+        self.screen = Screen::MainMenu;
+        self.reset_list(MAIN_MENU_LEN);
+    }
+
+    fn open_version_menu(&mut self) {
+        self.screen = Screen::VersionMenu;
+        self.reset_list(VERSION_MENU_LEN);
+        match cursor_version::read_installed_versions() {
+            Some((p, k)) => {
+                self.status = StatusMsg::Dim(i18n::fmt_version_current(&p, &k));
+            }
+            None => {
+                self.status = StatusMsg::Warn(t(Msg::VersionNotFound).to_string());
+            }
+        }
+    }
+
+    fn show_version_menu_keep_status(&mut self) {
+        self.screen = Screen::VersionMenu;
+        self.reset_list(VERSION_MENU_LEN);
+    }
+
+    fn open_version_input(&mut self) {
+        let prefill = cursor_version::detect_installed().unwrap_or_default();
+        self.name_input = Input::default().with_value(prefill);
+        self.screen = Screen::VersionInput;
+        self.status = StatusMsg::Dim(t(Msg::VersionHint).to_string());
+    }
+
+    fn run_set_version(&mut self, ver: &str) {
+        match cursor_version::set_installed_version(ver) {
+            Ok((old, new)) if old == new => {
+                self.status = StatusMsg::Ok(t(Msg::VersionSame).to_string());
+                self.did_work = true;
+                self.show_version_menu_keep_status();
+            }
+            Ok((old, new)) => {
+                self.status = StatusMsg::Ok(format!(
+                    "{} — {}",
+                    i18n::fmt_version_changed(&old, &new),
+                    t(Msg::VersionRestartHint)
+                ));
+                self.did_work = true;
+                self.show_version_menu_keep_status();
+            }
+            Err(cursor_version::SetVersionError::InvalidVersion) => {
+                self.status = StatusMsg::Warn(t(Msg::VersionInvalid).to_string());
+            }
+            Err(cursor_version::SetVersionError::InstallNotFound) => {
+                self.status = StatusMsg::Warn(t(Msg::VersionNotFound).to_string());
+            }
+            Err(e) if e.is_permission() => {
+                if elevate::is_process_elevated() {
+                    self.status = StatusMsg::Warn(t(Msg::VersionPermission).to_string());
+                } else {
+                    self.status = StatusMsg::Dim(t(Msg::VersionNeedAdmin).to_string());
+                    self.pending_elevate = Some(ElevateRequest::SetVersion(ver.to_string()));
+                }
+            }
+            Err(e) => {
+                self.status =
+                    StatusMsg::Warn(format!("{}: {}", t(Msg::VersionFail), e.detail()));
+            }
+        }
+    }
+
+    fn run_restore_version(&mut self) {
+        match cursor_version::restore_installed_version() {
+            Ok(n) => {
+                self.status = StatusMsg::Ok(format!(
+                    "{} — {}",
+                    i18n::fmt_version_restored(n),
+                    t(Msg::VersionRestartHint)
+                ));
+                self.did_work = true;
+                self.show_version_menu_keep_status();
+            }
+            Err(cursor_version::RestoreVersionError::InstallNotFound) => {
+                self.status = StatusMsg::Warn(t(Msg::VersionNotFound).to_string());
+            }
+            Err(cursor_version::RestoreVersionError::NoBackup) => {
+                self.status = StatusMsg::Warn(t(Msg::VersionNoBackup).to_string());
+            }
+            Err(e) if e.is_permission() => {
+                if elevate::is_process_elevated() {
+                    self.status = StatusMsg::Warn(t(Msg::VersionPermission).to_string());
+                } else {
+                    self.status = StatusMsg::Dim(t(Msg::VersionNeedAdmin).to_string());
+                    self.pending_elevate = Some(ElevateRequest::RestoreVersion);
+                }
+            }
+            Err(e) => {
+                self.status =
+                    StatusMsg::Warn(format!("{}: {}", t(Msg::VersionFail), e.detail()));
+            }
+        }
+    }
+
+    fn handle_version_key(&mut self, key: KeyEvent) {
+        if !matches!(self.screen, Screen::VersionInput) {
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => {
+                self.open_version_menu();
+            }
+            KeyCode::Enter => {
+                let raw = self.name_input.value().trim().to_string();
+                if !cursor_version::is_strict_semver(&raw) {
+                    self.status = StatusMsg::Warn(t(Msg::VersionInvalid).to_string());
+                    return;
+                }
+                self.run_set_version(&raw);
+            }
+            KeyCode::Backspace => {
+                self.name_input.handle(InputRequest::DeletePrevChar);
+            }
+            KeyCode::Delete => {
+                self.name_input.handle(InputRequest::DeleteNextChar);
+            }
+            KeyCode::Left => {
+                self.name_input.handle(InputRequest::GoToPrevChar);
+            }
+            KeyCode::Right => {
+                self.name_input.handle(InputRequest::GoToNextChar);
+            }
+            KeyCode::Char(c) => {
+                self.name_input.handle(InputRequest::InsertChar(c));
+            }
+            _ => {}
+        }
+    }
+
     fn handle_back(&mut self) {
         let next = match self.screen.clone() {
             Screen::Language | Screen::MainMenu => {
@@ -1382,7 +1634,8 @@ impl App {
             Screen::Scanning { .. }
             | Screen::CleanScope
             | Screen::BackupMode
-            | Screen::UninstallScope => Screen::MainMenu,
+            | Screen::UninstallScope
+            | Screen::VersionMenu => Screen::MainMenu,
             Screen::ScanAndPlan { .. } => Screen::CleanScope,
             Screen::CustomClean {
                 editor,
@@ -1393,6 +1646,10 @@ impl App {
                 ..
             } => Self::scan_screen(editor, scope, root, total, stats),
             Screen::BackupName { .. } => return,
+            Screen::VersionInput => {
+                self.open_version_menu();
+                return;
+            }
             Screen::RestoreManage { .. } => Screen::MainMenu,
             Screen::RestorePick { backups } | Screen::DeleteMulti { backups } => {
                 Screen::RestoreManage { backups }
@@ -1427,7 +1684,10 @@ impl App {
             ])
             .split(f.area());
 
-        let animate_banner = !matches!(self.screen, Screen::BackupName { .. });
+        let animate_banner = !matches!(
+            self.screen,
+            Screen::BackupName { .. } | Screen::VersionInput
+        );
         draw_banner(f, chunks[0], t(Msg::MainMenu), frame, animate_banner);
 
         match &self.screen {
@@ -1512,7 +1772,30 @@ impl App {
                 draw_input_field(
                     f,
                     input_area,
+                    t(Msg::BackupNameAsk),
                     t(Msg::BackupNameHint),
+                    &display,
+                    cursor,
+                );
+            }
+            Screen::VersionInput => {
+                self.list_hit_area = Rect::default();
+                let input_area = chunks[1];
+                let scroll = self
+                    .name_input
+                    .visual_scroll(input_area.width.saturating_sub(4) as usize);
+                let display = self
+                    .name_input
+                    .value()
+                    .chars()
+                    .skip(scroll)
+                    .collect::<String>();
+                let cursor = self.name_input.visual_cursor().saturating_sub(scroll);
+                draw_input_field(
+                    f,
+                    input_area,
+                    t(Msg::VersionAsk),
+                    t(Msg::VersionHint),
                     &display,
                     cursor,
                 );
@@ -1579,6 +1862,7 @@ impl App {
                     Screen::BackupMode => t(Msg::BackupMode),
                     Screen::CleanScope => t(Msg::PickScope),
                     Screen::UninstallScope => t(Msg::PickUninstall),
+                    Screen::VersionMenu => t(Msg::VersionMenu),
                     Screen::RestoreManage { .. } => t(Msg::BackupManage),
                     Screen::RestorePick { .. } => t(Msg::PickBackup),
                     _ => "",

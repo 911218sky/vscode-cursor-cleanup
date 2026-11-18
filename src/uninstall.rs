@@ -25,23 +25,7 @@ impl UninstallReport {
     }
 }
 
-/// Whether this process is running elevated (Administrator) on Windows.
-pub fn is_process_elevated() -> bool {
-    #[cfg(windows)]
-    {
-        Command::new("net")
-            .arg("session")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
-}
+pub use crate::elevate::is_process_elevated;
 
 /// IDE uninstall (official Uninstall.exe / Program Files) needs elevation on Windows.
 pub fn needs_elevation(scope: DataScope) -> bool {
@@ -56,57 +40,110 @@ pub fn needs_elevation(scope: DataScope) -> bool {
     }
 }
 
-#[cfg(windows)]
-fn powershell_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
-}
-
 /// Relaunch this executable elevated with `--uninstall-run` (Windows UAC).
 /// Returns true if the elevated process was started (and waited for).
 pub fn relaunch_elevated_uninstall(scope: DataScope) -> bool {
-    #[cfg(windows)]
-    {
-        let Ok(exe) = std::env::current_exe() else {
-            return false;
-        };
-        let lang = i18n::lang().code();
-        let scope_arg = match scope {
-            DataScope::Ide => "ide",
-            DataScope::Cli => "cli",
-            DataScope::Both => "both",
-        };
-        let file = powershell_quote(&exe.display().to_string());
-        let arg_list = format!(
-            "'--uninstall-run','--scope','{}','--lang','{}'",
-            scope_arg,
-            lang.replace('\'', "''")
-        );
-        let cmd = format!(
-            "Start-Process -FilePath {file} -ArgumentList {arg_list} -Verb RunAs -Wait"
-        );
-        Command::new("powershell")
-            .args(["-NoProfile", "-Command", &cmd])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = scope;
-        false
+    let scope_arg = match scope {
+        DataScope::Ide => "ide",
+        DataScope::Cli => "cli",
+        DataScope::Both => "both",
+    };
+    crate::elevate::relaunch_elevated(&["--uninstall-run", "--scope", scope_arg])
+}
+
+/// Official uninstaller command (exe + args). Prefer silent Inno Setup when available.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UninstallerCmd {
+    pub exe: PathBuf,
+    pub args: Vec<String>,
+    pub source: &'static str,
+}
+
+impl UninstallerCmd {
+    pub fn display_line(&self) -> String {
+        if self.args.is_empty() {
+            format!("{} ({})", self.exe.display(), self.source)
+        } else {
+            format!(
+                "{} {} ({})",
+                self.exe.display(),
+                self.args.join(" "),
+                self.source
+            )
+        }
     }
 }
 
-/// Find Cursor's official Uninstall.exe under LocalAppData\\Programs.
+/// Resolve Cursor's Windows uninstaller (registry → disk).
+/// Supports system installs (`Program Files\\cursor\\unins000.exe`) and user installs.
 pub fn find_windows_uninstaller() -> Option<PathBuf> {
+    find_windows_uninstaller_cmd().map(|c| c.exe)
+}
+
+pub fn find_windows_uninstaller_cmd() -> Option<UninstallerCmd> {
     #[cfg(windows)]
     {
-        let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
+        if let Some(cmd) = find_uninstaller_from_registry() {
+            return Some(cmd);
+        }
+        for dir in windows_install_dirs() {
+            if let Some(exe) = find_uninstaller_in_dir(&dir) {
+                // Inno Setup (`unins000.exe`): use /SILENT so the flow does not hang on a GUI.
+                let args = if is_inno_unins(&exe) {
+                    vec!["/SILENT".into()]
+                } else {
+                    Vec::new()
+                };
+                return Some(UninstallerCmd {
+                    exe,
+                    args,
+                    source: "disk",
+                });
+            }
+        }
+        None
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+#[cfg(windows)]
+fn is_inno_unins(exe: &Path) -> bool {
+    exe.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| {
+            let lower = n.to_ascii_lowercase();
+            lower.starts_with("unins") && lower.ends_with(".exe") && !lower.contains("uninstall")
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn windows_install_dirs() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for root in [
+        std::env::var_os("ProgramFiles").map(PathBuf::from),
+        std::env::var_os("ProgramFiles(x86)").map(PathBuf::from),
+        Some(PathBuf::from(r"C:\Program Files")),
+        Some(PathBuf::from(r"C:\Program Files (x86)")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for name in ["cursor", "Cursor"] {
+            let p = root.join(name);
+            if p.is_dir() && !dirs.iter().any(|d| paths_equal(d.as_path(), p.as_path())) {
+                dirs.push(p);
+            }
+        }
+    }
+    if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
         let programs = local.join("Programs");
-        let mut dirs = Vec::new();
         for preferred in ["cursor", "Cursor"] {
             let p = programs.join(preferred);
-            if p.is_dir() {
+            if p.is_dir() && !dirs.iter().any(|d| paths_equal(d.as_path(), p.as_path())) {
                 dirs.push(p);
             }
         }
@@ -116,23 +153,108 @@ pub fn find_windows_uninstaller() -> Option<PathBuf> {
                 let n = name.to_string_lossy();
                 if n.to_ascii_lowercase().starts_with("cursor") && ent.path().is_dir() {
                     let p = ent.path();
-                    if !dirs.iter().any(|d| d == &p) {
+                    if !dirs.iter().any(|d| paths_equal(d.as_path(), p.as_path())) {
                         dirs.push(p);
                     }
                 }
             }
         }
-        for dir in dirs {
-            if let Some(u) = find_uninstaller_in_dir(&dir) {
-                return Some(u);
+    }
+    dirs
+}
+
+#[cfg(windows)]
+fn paths_equal(a: &Path, b: &Path) -> bool {
+    a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
+}
+
+#[cfg(not(windows))]
+fn paths_equal(a: &Path, b: &Path) -> bool {
+    a == b
+}
+
+/// Parse `"C:\\Path\\unins000.exe" /SILENT` style uninstall strings.
+pub fn parse_uninstall_command_line(raw: &str) -> Option<(PathBuf, Vec<String>)> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let (exe, rest): (PathBuf, String) = if let Some(stripped) = s.strip_prefix('"') {
+        let end = stripped.find('"')?;
+        let exe = PathBuf::from(&stripped[..end]);
+        let rest = stripped[end + 1..].trim().to_string();
+        (exe, rest)
+    } else {
+        let mut parts = s.split_whitespace();
+        let exe = PathBuf::from(parts.next()?);
+        let rest = parts.collect::<Vec<_>>().join(" ");
+        (exe, rest)
+    };
+    let args: Vec<String> = if rest.is_empty() {
+        Vec::new()
+    } else {
+        // Keep simple: one token groups for /SILENT /VERYSILENT etc.
+        rest.split_whitespace().map(|t| t.to_string()).collect()
+    };
+    Some((exe, args))
+}
+
+#[cfg(windows)]
+fn find_uninstaller_from_registry() -> Option<UninstallerCmd> {
+    // PowerShell is more reliable than adding a winreg dependency.
+    let script = r#"
+$ErrorActionPreference='SilentlyContinue'
+$paths = @(
+  'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+)
+Get-ItemProperty $paths |
+  Where-Object {
+    $_.DisplayName -match 'Cursor' -or
+    $_.InstallLocation -match '(?i)\\cursor\\?$' -or
+    $_.UninstallString -match '(?i)cursor'
+  } |
+  ForEach-Object {
+    $quiet = $_.QuietUninstallString
+    $plain = $_.UninstallString
+    if ($quiet) { "QUIET|$quiet" }
+    elseif ($plain) { "PLAIN|$plain" }
+  }
+"#;
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-Command", script])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let (kind, rest) = if let Some(r) = line.strip_prefix("QUIET|") {
+            ("registry-quiet", r)
+        } else if let Some(r) = line.strip_prefix("PLAIN|") {
+            ("registry", r)
+        } else {
+            continue;
+        };
+        if let Some((exe, args)) = parse_uninstall_command_line(rest) {
+            if exe.is_file() {
+                return Some(UninstallerCmd {
+                    exe,
+                    args,
+                    source: kind,
+                });
             }
         }
-        None
     }
-    #[cfg(not(windows))]
-    {
-        None
-    }
+    None
 }
 
 #[cfg(windows)]
@@ -151,15 +273,24 @@ fn find_uninstaller_in_dir(dir: &Path) -> Option<PathBuf> {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         let lower = name.to_ascii_lowercase();
-        if !(lower.ends_with(".exe") && lower.contains("uninstall")) {
+        if !lower.ends_with(".exe") {
             continue;
         }
+        // Match Uninstall.exe, *uninstall*.exe, and Inno Setup unins000.exe / unins001.exe.
         let score = if lower == "uninstall.exe" {
             0
         } else if lower.starts_with("uninstall") {
             1
-        } else {
+        } else if lower.contains("uninstall") {
             2
+        } else if lower.starts_with("unins") && lower.chars().nth(5).is_some_and(|c| c.is_ascii_digit())
+        {
+            // unins000.exe
+            3
+        } else if lower.starts_with("unins") {
+            4
+        } else {
+            continue;
         };
         candidates.push((score, p));
     }
@@ -174,9 +305,9 @@ fn push_if_exists(out: &mut Vec<PathBuf>, p: PathBuf) {
 }
 
 fn dedupe_paths(mut out: Vec<PathBuf>) -> Vec<PathBuf> {
-    let mut seen = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
     out.retain(|p| {
-        if seen.iter().any(|s: &PathBuf| s == p) {
+        if seen.iter().any(|s| paths_equal(s.as_path(), p.as_path())) {
             false
         } else {
             seen.push(p.clone());
@@ -215,6 +346,12 @@ fn push_cli_leftovers(out: &mut Vec<PathBuf>) {
 fn push_ide_leftovers(out: &mut Vec<PathBuf>) {
     #[cfg(windows)]
     {
+        // System installs (common): C:\Program Files\cursor
+        for dir in windows_install_dirs() {
+            // Only keep Program Files / Program Files (x86) install roots here;
+            // LOCALAPPDATA\Programs is also returned by windows_install_dirs — include those too.
+            push_if_exists(out, dir);
+        }
         if let Some(roaming) = std::env::var_os("APPDATA").map(PathBuf::from) {
             push_if_exists(out, roaming.join("Cursor"));
             let sm = roaming
@@ -236,16 +373,6 @@ fn push_ide_leftovers(out: &mut Vec<PathBuf>) {
                         continue;
                     }
                     if lower.starts_with("cursor") {
-                        push_if_exists(out, ent.path());
-                    }
-                }
-            }
-            let programs = local.join("Programs");
-            if let Ok(entries) = std::fs::read_dir(&programs) {
-                for ent in entries.flatten() {
-                    let name = ent.file_name();
-                    let n = name.to_string_lossy();
-                    if n.to_ascii_lowercase().starts_with("cursor") {
                         push_if_exists(out, ent.path());
                     }
                 }
@@ -359,7 +486,7 @@ fn clean_cursor_agent_user_path() -> bool {
         return false;
     };
     let agent = local.join("cursor-agent");
-    let q = powershell_quote(&agent.display().to_string());
+    let q = crate::elevate::powershell_quote(&agent.display().to_string());
     let script = format!(
         "$target = {q}.TrimEnd('\\').ToLowerInvariant(); \
          $p = [Environment]::GetEnvironmentVariable('PATH','User'); \
@@ -395,6 +522,100 @@ fn uninstall_done_label(scope: DataScope) -> &'static str {
     }
 }
 
+/// Dry-run plan: what uninstall would do (never deletes).
+#[derive(Debug, Clone)]
+pub struct UninstallPlan {
+    pub scope: DataScope,
+    pub uninstaller: Option<UninstallerCmd>,
+    pub leftovers: Vec<PathBuf>,
+    pub will_clean_path: bool,
+    pub needs_admin: bool,
+    pub notes: Vec<String>,
+}
+
+/// Build an uninstall plan for verification (read-only).
+pub fn plan_uninstall(scope: DataScope) -> UninstallPlan {
+    let mut notes = Vec::new();
+    let uninstaller = if scope.includes_ide() {
+        #[cfg(windows)]
+        {
+            let cmd = find_windows_uninstaller_cmd();
+            if cmd.is_none() {
+                notes.push(t(Msg::UninstallNoUninstaller).to_string());
+            }
+            cmd
+        }
+        #[cfg(not(windows))]
+        {
+            notes.push(t(Msg::UninstallNoUninstaller).to_string());
+            None
+        }
+    } else {
+        None
+    };
+    let leftovers = leftover_paths(scope);
+    if leftovers.is_empty() {
+        notes.push(t(Msg::UninstallPlanNoLeftovers).to_string());
+    }
+    UninstallPlan {
+        scope,
+        uninstaller,
+        leftovers,
+        will_clean_path: {
+            #[cfg(windows)]
+            {
+                scope.includes_cli()
+            }
+            #[cfg(not(windows))]
+            {
+                false
+            }
+        },
+        needs_admin: needs_elevation(scope),
+        notes,
+    }
+}
+
+/// Print a dry-run uninstall plan (no deletions).
+pub fn print_uninstall_plan(scope: DataScope) {
+    let plan = plan_uninstall(scope);
+    println!();
+    println!("  {}", t(Msg::UninstallPlanTitle));
+    println!(
+        "  {} {}",
+        t(Msg::UninstallPlanScope),
+        i18n::scope_short(plan.scope)
+    );
+    if plan.needs_admin {
+        println!("  ⚠ {}", t(Msg::UninstallPlanNeedsAdmin));
+    }
+    match &plan.uninstaller {
+        Some(cmd) => {
+            println!("  ✔ {}: {}", t(Msg::UninstallPlanUninstaller), cmd.display_line());
+        }
+        None if scope.includes_ide() => {
+            println!("  ⚠ {}: —", t(Msg::UninstallPlanUninstaller));
+        }
+        None => {}
+    }
+    println!(
+        "  {}: {}",
+        t(Msg::UninstallPlanLeftovers),
+        plan.leftovers.len()
+    );
+    for p in &plan.leftovers {
+        println!("    · {}", p.display());
+    }
+    if plan.will_clean_path {
+        println!("  · {}", t(Msg::UninstallStepPath));
+    }
+    for note in &plan.notes {
+        println!("  ⚠ {note}");
+    }
+    println!("  {}", t(Msg::UninstallPlanDryRun));
+    println!();
+}
+
 /// Uninstall for `scope`: force-quit → official uninstaller (Windows IDE) → wipe leftovers → PATH.
 pub fn run_full_uninstall(scope: DataScope, mut progress: impl FnMut(&str)) -> UninstallReport {
     let mut report = UninstallReport::default();
@@ -406,14 +627,16 @@ pub fn run_full_uninstall(scope: DataScope, mut progress: impl FnMut(&str)) -> U
 
     #[cfg(windows)]
     if scope.includes_ide() {
-        if let Some(uninst) = find_windows_uninstaller() {
+        if let Some(cmd) = find_windows_uninstaller_cmd() {
             progress(&format!(
                 "{} — {}",
                 t(Msg::UninstallStepUninstaller),
-                uninst.display()
+                cmd.display_line()
             ));
             report.uninstaller_ran = true;
-            match Command::new(&uninst).status() {
+            let mut c = Command::new(&cmd.exe);
+            c.args(&cmd.args);
+            match c.status() {
                 Ok(st) => {
                     report.uninstaller_ok = st.success();
                     if !st.success() {
@@ -501,5 +724,78 @@ pub fn run_uninstall_cli(scope: DataScope) -> bool {
     } else {
         println!("  ✔ {}", uninstall_done_label(scope));
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn parse_quoted_quiet_uninstall_string() {
+        let (exe, args) = parse_uninstall_command_line(
+            r#""C:\Program Files\cursor\unins000.exe" /SILENT"#,
+        )
+        .unwrap();
+        assert_eq!(exe, PathBuf::from(r"C:\Program Files\cursor\unins000.exe"));
+        assert_eq!(args, vec!["/SILENT".to_string()]);
+    }
+
+    #[test]
+    fn parse_plain_uninstall_string() {
+        let (exe, args) =
+            parse_uninstall_command_line(r"C:\Apps\cursor\Uninstall.exe").unwrap();
+        assert_eq!(exe, PathBuf::from(r"C:\Apps\cursor\Uninstall.exe"));
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn find_inno_unins000_in_dir() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("cursor-unins-test-{stamp}"));
+        fs::create_dir_all(&dir).unwrap();
+        let unins = dir.join("unins000.exe");
+        fs::write(&unins, b"").unwrap();
+        fs::write(dir.join("Cursor.exe"), b"").unwrap();
+
+        #[cfg(windows)]
+        {
+            let found = find_uninstaller_in_dir(&dir).unwrap();
+            assert_eq!(found, unins);
+            assert!(is_inno_unins(&found));
+        }
+        #[cfg(not(windows))]
+        {
+            // parse helper still covered above
+            let _ = unins;
+        }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn find_prefers_uninstall_exe_over_unins() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("cursor-unins-pref-{stamp}"));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("unins000.exe"), b"").unwrap();
+        let classic = dir.join("Uninstall.exe");
+        fs::write(&classic, b"").unwrap();
+
+        #[cfg(windows)]
+        {
+            let found = find_uninstaller_in_dir(&dir).unwrap();
+            assert_eq!(found, classic);
+        }
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

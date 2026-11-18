@@ -370,6 +370,7 @@ pub fn draw_confirm(f: &mut Frame, area: Rect, prompt: &str, _frame: u64) {
 pub fn draw_input_field(
     f: &mut Frame,
     area: Rect,
+    title: &str,
     hint: &str,
     value: &str,
     cursor: usize,
@@ -379,7 +380,7 @@ pub fn draw_input_field(
         .border_type(BorderType::Plain)
         .border_style(theme::border_style(0))
         .title(Span::styled(
-            format!(" {} ", t(Msg::BackupNameAsk)),
+            format!(" {title} "),
             theme::accent_style(0, 0),
         ));
     let inner = block.inner(area);
@@ -478,7 +479,8 @@ pub fn mouse_to_index(
 pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
     let defaults: &[&str] = match screen {
         MenuScreen::Language => &["繁", "简", "En"],
-        MenuScreen::MainMenu => &["—", "·", "↺", "⚠", "×"],
+        MenuScreen::MainMenu => &["—", "·", "↺", "＃", "⊘", "⚠", "×"],
+        MenuScreen::VersionMenu => &["✎", "↺", "←"],
         MenuScreen::PickScope => &["◇", "◆", "◎", "←"],
         MenuScreen::Plan => &["·", "—", "═", "…", "←"],
         MenuScreen::CustomClean => &["✓", "→", "←"],
@@ -500,6 +502,7 @@ pub enum MenuScreen {
     CustomClean,
     BackupMode,
     RestoreManage,
+    VersionMenu,
     Confirm,
     Generic,
 }

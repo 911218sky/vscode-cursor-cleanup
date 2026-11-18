@@ -104,7 +104,32 @@ tr! {
     MenuClean => { tw: "清理快取 / 狀態", cn: "清理缓存 / 状态", en: "Clean caches / state" },
     MenuBackup => { tw: "備份", cn: "备份", en: "Backup" },
     MenuRestore => { tw: "恢復 / 刪除備份", cn: "恢复 / 删除备份", en: "Restore / delete backups" },
+    MenuSetVersion => { tw: "改 Cursor 版本號", cn: "改 Cursor 版本号", en: "Change Cursor version" },
+    MenuDisableUpdates => { tw: "停用自動更新", cn: "停用自动更新", en: "Disable auto updates" },
     MenuUninstall => { tw: "卸載 Cursor / CLI", cn: "卸载 Cursor / CLI", en: "Uninstall Cursor / CLI" },
+    UpdatesHint => { tw: "寫入 %APPDATA%\\Cursor\\User\\settings.json：update.mode=none（並關閉 Windows 背景更新）", cn: "写入 %APPDATA%\\Cursor\\User\\settings.json：update.mode=none（并关闭 Windows 后台更新）", en: "Writes %APPDATA%\\Cursor\\User\\settings.json: update.mode=none (and disables Windows background updates)" },
+    UpdatesAlreadyOff => { tw: "自動更新已停用（update.mode=none）", cn: "自动更新已停用（update.mode=none）", en: "Auto updates already disabled (update.mode=none)" },
+    UpdatesDisabledOk => { tw: "已停用自動更新", cn: "已停用自动更新", en: "Auto updates disabled" },
+    UpdatesFail => { tw: "停用更新失敗", cn: "停用更新失败", en: "Failed to disable updates" },
+    UpdatesRestartHint => { tw: "變更後建議重啟 Cursor", cn: "变更后建议重启 Cursor", en: "Restart Cursor for the change to fully apply" },
+    UpdatesSettingsMissing => { tw: "找不到 Cursor 使用者設定目錄", cn: "找不到 Cursor 用户设置目录", en: "Cursor user settings folder not found" },
+    VersionMenu => { tw: "改版本號", cn: "改版本号", en: "Change version" },
+    VersionSetNew => { tw: "設定新版本號…", cn: "设置新版本号…", en: "Set new version…" },
+    VersionRestoreBak => { tw: "還原原始版本（.bak）", cn: "还原原始版本（.bak）", en: "Restore original (.bak)" },
+    VersionAsk => { tw: "新版本號（major.minor.patch）", cn: "新版本号（major.minor.patch）", en: "New version (major.minor.patch)" },
+    VersionHint => { tw: "只改 product.json / package.json 頂層 version；不改 commit。重啟 Cursor 後生效。", cn: "只改 product.json / package.json 顶层 version；不改 commit。重启 Cursor 后生效。", en: "Only rewrites top-level version in product.json / package.json; commit untouched. Restart Cursor to apply." },
+    VersionInvalid => { tw: "版本格式無效，請用如 3.27.22", cn: "版本格式无效，请用如 3.27.22", en: "Invalid version — use e.g. 3.27.22" },
+    VersionNotFound => { tw: "找不到 Cursor 安裝（product.json / package.json）", cn: "找不到 Cursor 安装（product.json / package.json）", en: "Cursor install not found (product.json / package.json)" },
+    VersionPermission => { tw: "寫入被拒 — 請以系統管理員身分重試（Program Files 安裝）", cn: "写入被拒 — 请以管理员身份重试（Program Files 安装）", en: "Write denied — retry as Administrator (Program Files install)" },
+    VersionNeedAdmin => { tw: "需要系統管理員權限才能改安裝目錄版本，正在請求 UAC…", cn: "需要管理员权限才能改安装目录版本，正在请求 UAC…", en: "Administrator required to change install version — requesting UAC…" },
+    VersionElevateOk => { tw: "已以系統管理員完成改版本", cn: "已以管理员完成改版本", en: "Version change completed with Administrator rights" },
+    VersionElevateCancel => { tw: "已取消 UAC，或提升權限失敗", cn: "已取消 UAC，或提升权限失败", en: "UAC cancelled or elevation failed" },
+    VersionNoBackup => { tw: "沒有版本備份（.bak）可還原", cn: "没有版本备份（.bak）可还原", en: "No version backup (.bak) to restore" },
+    VersionDone => { tw: "版本已更新", cn: "版本已更新", en: "Version updated" },
+    VersionSame => { tw: "版本已是目標值，無需修改", cn: "版本已是目标值，无需修改", en: "Already at target version" },
+    VersionRestoreDone => { tw: "已還原版本檔", cn: "已还原版本文件", en: "Version files restored" },
+    VersionFail => { tw: "改版本失敗", cn: "改版本失败", en: "Failed to change version" },
+    VersionRestartHint => { tw: "請完全退出並重開 Cursor，請求頭才會帶新版本", cn: "请完全退出并重开 Cursor，请求头才会带新版本", en: "Fully quit and reopen Cursor so request headers pick up the new version" },
     ConfirmUninstall => { tw: "將完整移除 Cursor IDE 與 Agent CLI（含設定、聊天、登入、擴充與 CLI）。Windows 會先開啟官方卸載程式，結束後再清除殘留資料夾。需要系統管理員權限。專案內的 .cursor 不會刪除。確定？", cn: "将完整移除 Cursor IDE 与 Agent CLI（含设置、聊天、登录、扩展与 CLI）。Windows 会先打开官方卸载程序，结束后再清除残留文件夹。需要管理员权限。项目内的 .cursor 不会删除。确定？", en: "This permanently removes Cursor IDE and Agent CLI (settings, chats, login, extensions, CLI). On Windows the official uninstaller runs first, then leftover folders are deleted. Administrator rights required. Project .cursor folders are not touched. Continue?" },
     ConfirmUninstallIde => { tw: "將移除 Cursor IDE（含設定、聊天、登入、擴充）。Windows 會先開啟官方卸載程式，結束後再清除殘留。需要系統管理員權限。不會刪除 Agent CLI（~/.cursor、cursor-agent）。專案內的 .cursor 不會刪除。確定？", cn: "将移除 Cursor IDE（含设置、聊天、登录、扩展）。Windows 会先打开官方卸载程序，结束后再清除残留。需要管理员权限。不会删除 Agent CLI（~/.cursor、cursor-agent）。项目内的 .cursor 不会删除。确定？", en: "This removes Cursor IDE (settings, chats, login, extensions). On Windows the official uninstaller runs first, then leftovers are deleted. Administrator rights required. Agent CLI (~/.cursor, cursor-agent) is kept. Project .cursor folders are not touched. Continue?" },
     ConfirmUninstallCli => { tw: "將移除 Agent CLI（~/.cursor、cursor-agent 與 PATH）。不會刪除 Cursor IDE 安裝與 %APPDATA%\\Cursor。專案內的 .cursor 不會刪除。確定？", cn: "将移除 Agent CLI（~/.cursor、cursor-agent 与 PATH）。不会删除 Cursor IDE 安装与 %APPDATA%\\Cursor。项目内的 .cursor 不会删除。确定？", en: "This removes Agent CLI (~/.cursor, cursor-agent, and PATH). Cursor IDE install and %APPDATA%\\Cursor are kept. Project .cursor folders are not touched. Continue?" },
@@ -126,6 +151,13 @@ tr! {
     UninstallDoneIde => { tw: "Cursor IDE 卸載完成", cn: "Cursor IDE 卸载完成", en: "Cursor IDE uninstall complete" },
     UninstallDoneCli => { tw: "Agent CLI 卸載完成", cn: "Agent CLI 卸载完成", en: "Agent CLI uninstall complete" },
     UninstallDonePartial => { tw: "卸載完成，但部分項目失敗", cn: "卸载完成，但部分项目失败", en: "Uninstall finished with some failures" },
+    UninstallPlanTitle => { tw: "卸載預覽（乾跑，不會刪除任何東西）", cn: "卸载预览（干跑，不会删除任何东西）", en: "Uninstall preview (dry-run — deletes nothing)" },
+    UninstallPlanScope => { tw: "範圍：", cn: "范围：", en: "Scope:" },
+    UninstallPlanUninstaller => { tw: "官方卸載程式", cn: "官方卸载程序", en: "Official uninstaller" },
+    UninstallPlanLeftovers => { tw: "將清除的殘留路徑", cn: "将清除的残留路径", en: "Leftover paths to remove" },
+    UninstallPlanNoLeftovers => { tw: "目前找不到殘留路徑", cn: "目前找不到残留路径", en: "No leftover paths found" },
+    UninstallPlanDryRun => { tw: "以上僅預覽。真正卸載請用 TUI「卸載」或 --uninstall-run", cn: "以上仅预览。真正卸载请用 TUI「卸载」或 --uninstall-run", en: "Preview only. To uninstall for real use TUI Uninstall or --uninstall-run" },
+    UninstallPlanNeedsAdmin => { tw: "真正執行時需要系統管理員權限（UAC）", cn: "真正执行时需要管理员权限（UAC）", en: "A real uninstall will require Administrator (UAC)" },
     PickScope => { tw: "選擇資料範圍", cn: "选择数据范围", en: "Choose data scope" },
     PickUninstall => { tw: "選擇要卸載的項目", cn: "选择要卸载的项目", en: "Choose what to uninstall" },
     ScopeIde => { tw: "Cursor IDE（編輯器）", cn: "Cursor IDE（编辑器）", en: "Cursor IDE (editor)" },
@@ -370,6 +402,52 @@ pub fn fmt_summary(name: &str, before: &str, after: &str, freed: &str) -> String
     }
 }
 
+pub fn fmt_version_current(product: &str, package: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("目前版本  product={product}  package={package}"),
+        Lang::ZhCn => format!("当前版本  product={product}  package={package}"),
+        Lang::En => format!("Current  product={product}  package={package}"),
+    }
+}
+
+pub fn fmt_version_changed(old: &str, new: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{}：{old} → {new}", t(Msg::VersionDone)),
+        Lang::ZhCn => format!("{}：{old} → {new}", t(Msg::VersionDone)),
+        Lang::En => format!("{}: {old} → {new}", t(Msg::VersionDone)),
+    }
+}
+
+pub fn fmt_version_restored(n: usize) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{}（{n}）", t(Msg::VersionRestoreDone)),
+        Lang::ZhCn => format!("{}（{n}）", t(Msg::VersionRestoreDone)),
+        Lang::En => format!("{} ({n})", t(Msg::VersionRestoreDone)),
+    }
+}
+
+pub fn fmt_updates_status(mode: Option<&str>, win_bg: Option<bool>) -> String {
+    let mode = mode.unwrap_or("(unset)");
+    let bg = match win_bg {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "(unset)",
+    };
+    match lang() {
+        Lang::ZhTw => format!("update.mode={mode}  enableWindowsBackgroundUpdates={bg}"),
+        Lang::ZhCn => format!("update.mode={mode}  enableWindowsBackgroundUpdates={bg}"),
+        Lang::En => format!("update.mode={mode}  enableWindowsBackgroundUpdates={bg}"),
+    }
+}
+
+pub fn fmt_updates_disabled(path: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{}（{path}）", t(Msg::UpdatesDisabledOk)),
+        Lang::ZhCn => format!("{}（{path}）", t(Msg::UpdatesDisabledOk)),
+        Lang::En => format!("{} ({path})", t(Msg::UpdatesDisabledOk)),
+    }
+}
+
 pub fn help_text() -> String {
     match lang() {
         Lang::ZhTw => "\
@@ -380,18 +458,29 @@ cursor-cleanup  —  Cursor 清理 / 備份工具
   cursor-cleanup.exe --scan --scope ide
   cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang en
+  cursor-cleanup.exe --show-version
+  cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --restore-version
+  cursor-cleanup.exe --disable-updates
+  cursor-cleanup.exe --show-update-settings
 
 選項:
   -l, --lang <zh-TW|zh-CN|en>     語言（預設 zh-TW）
   -s, --scope <ide|cli|both>      資料範圍（預設 both；TUI 會再詢問）
   -y, --yes                       非互動，只清安全項（對應 scope 行程中會略過）
       --scan                      只掃描占用
+      --show-version              顯示安裝目錄 product/package 版本
+      --set-version <x.y.z>       只改頂層 version（先寫 .bak）
+      --restore-version           從 .bak 還原版本檔
+      --disable-updates           寫入 settings.json：update.mode=none
+      --show-update-settings      顯示目前 update.mode 等設定
+      --uninstall-plan            卸載乾跑預覽（不刪除；可搭配 --scope）
       --uninstall-run             卸載（管理員／內部用；可搭配 --scope）
       --no-pause                  結束不暫停
   -h, --help                      說明
-  -V, --version                   版本
+  -V, --version                   本工具版本
 
-無參數：TUI 互動 — 清理／備份／恢復／卸載（可選 IDE／CLI／兩者）
+無參數：TUI 互動 — 清理／備份／恢復／改版本／停用更新／卸載
 --scan / --yes：純文字輸出（可用 --scope）
 備份位置：與程式同目錄的 backups\\\\
 "
@@ -404,18 +493,29 @@ cursor-cleanup  —  Cursor 清理 / 备份工具
   cursor-cleanup.exe --scan --scope ide
   cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang en
+  cursor-cleanup.exe --show-version
+  cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --restore-version
+  cursor-cleanup.exe --disable-updates
+  cursor-cleanup.exe --show-update-settings
 
 选项:
   -l, --lang <zh-TW|zh-CN|en>     语言（默认 zh-TW）
   -s, --scope <ide|cli|both>      数据范围（默认 both；TUI 会再询问）
   -y, --yes                       非互动，只清安全项（对应 scope 进程中会跳过）
       --scan                      只扫描占用
+      --show-version              显示安装目录 product/package 版本
+      --set-version <x.y.z>       只改顶层 version（先写 .bak）
+      --restore-version           从 .bak 还原版本文件
+      --disable-updates           写入 settings.json：update.mode=none
+      --show-update-settings      显示当前 update.mode 等设置
+      --uninstall-plan            卸载干跑预览（不删除；可搭配 --scope）
       --uninstall-run             卸载（管理员／内部用；可搭配 --scope）
       --no-pause                  结束不暂停
   -h, --help                      帮助
-  -V, --version                   版本
+  -V, --version                   本工具版本
 
-无参数：TUI 互动 — 清理／备份／恢复／卸载（可选 IDE／CLI／两者）
+无参数：TUI 互动 — 清理／备份／恢复／改版本／停用更新／卸载
 --scan / --yes：纯文字输出（可用 --scope）
 备份位置：与程序同目录的 backups\\\\
 "
@@ -428,18 +528,29 @@ Usage:
   cursor-cleanup.exe --scan --scope ide
   cursor-cleanup.exe --scan --scope cli
   cursor-cleanup.exe --lang zh-TW
+  cursor-cleanup.exe --show-version
+  cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --restore-version
+  cursor-cleanup.exe --disable-updates
+  cursor-cleanup.exe --show-update-settings
 
 Options:
   -l, --lang <zh-TW|zh-CN|en>     Language (default zh-TW)
   -s, --scope <ide|cli|both>      Data scope (default both; TUI asks again)
   -y, --yes                       Non-interactive, safe items only (skips if scope processes running)
       --scan                      Scan sizes only
+      --show-version              Print install product/package version
+      --set-version <x.y.z>       Rewrite top-level version only (writes .bak first)
+      --restore-version           Restore version files from .bak
+      --disable-updates           Write settings.json: update.mode=none
+      --show-update-settings      Print current update.mode settings
+      --uninstall-plan            Uninstall dry-run preview (deletes nothing; use with --scope)
       --uninstall-run             Uninstall (admin / internal; use with --scope)
       --no-pause                  Do not pause on exit
   -h, --help                      Help
-  -V, --version                   Version
+  -V, --version                   This tool's version
 
-No args: TUI — Clean / Backup / Restore / Uninstall (IDE / CLI / both)
+No args: TUI — Clean / Backup / Restore / Change version / Disable updates / Uninstall
 --scan / --yes: stdout mode (supports --scope)
 Backups: backups\\\\ next to the executable
 "

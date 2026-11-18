@@ -3,14 +3,14 @@
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.5.4-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-0.5.6-brightgreen.svg)
 
-**Double-click interactive cleaner** ¡¤ also works as CLI  
+**Double-click interactive cleaner** Â· also works as CLI  
 Default UI language: **Traditional Chinese** (`zh-TW`); also `zh-CN` / `en`
 
 Cleans Cursor caches and bloated `state.vscdb`
 
-[·±ówÖĞÎÄ](./README.md) ¡¤ [¼òÌåÖĞÎÄ](./README.zh-CN.md) ¡¤ [Docs](./docs/guide.md)
+[ç¹é«”ä¸­æ–‡](./README.md) Â· [ç®€ä½“ä¸­æ–‡](./README.zh-CN.md) Â· [Docs](./docs/guide.md)
 
 </div>
 
@@ -19,7 +19,7 @@ Cleans Cursor caches and bloated `state.vscdb`
 Rust rewrite based on [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup).  
 Repo: https://github.com/911218sky/vscode-cursor-cleanup
 
-## What¡¯s different from upstream?
+## Whatâ€™s different from upstream?
 
 Upstream [ThendCN/vscode-cursor-cleanup](https://github.com/ThendCN/vscode-cursor-cleanup) is a **macOS Bash** interactive cleaner for VSCode/Cursor caches and `state.vscdb`, with ZIP backups during cleanup.
 
@@ -31,29 +31,29 @@ This project is **Cursor-only** and adds:
 | Platforms | **macOS**-focused | **Windows / macOS / Linux** |
 | UX | Terminal + `read` prompts | **Double-click** + arrow-key menus + **Back** |
 | Language | Chinese script text | **zh-TW (default) / zh-CN / en** |
-| Clean plans | Step-by-step 1¨C6 confirms | **Conservative / Standard / Deep / Custom** |
-| Backup | ZIP inside cleanup flow | **Dedicated Backup** (config ¡À `state.vscdb`) |
-| Restore | Manual unzip/copy in docs | **Restore / delete** ¡ª restore one or multi-select delete |
+| Clean plans | Step-by-step 1â€“6 confirms | **Conservative / Standard / Deep / Custom** |
+| Backup | ZIP inside cleanup flow | **Dedicated Backup** (config Â± `state.vscdb`) |
+| Restore | Manual unzip/copy in docs | **Restore / delete** â€” restore one or multi-select delete |
 | Distribution | Clone & chmod scripts | **GitHub Actions** multi-platform Releases |
 | Paths | Hardcoded user paths (fixed upstream-style) | Resolves `%APPDATA%` / Application Support / XDG |
 
 ### Kept from upstream
 
-- Risk-tiered cleanup (caches ¡ú history ¡ú `state.vscdb`)
+- Risk-tiered cleanup (caches â†’ history â†’ `state.vscdb`)
 - Pick a plan and clean immediately (backup is a separate menu)
 - Never touches project source or installed extensions
 
 ### One-line pitch
 
-> **Cross-platform, double-click cleaner with backup + selectable restore ¡ª Traditional Chinese by default, download from Releases.**
+> **Cross-platform, double-click cleaner with backup + selectable restore â€” Traditional Chinese by default, download from Releases.**
 
 ## Quick start (Windows)
 
 1. Open [Releases](https://github.com/911218sky/vscode-cursor-cleanup/releases)
 2. Download **`cursor-cleanup.exe`** (or the `.zip` and unzip)
 3. **Double-click `cursor-cleanup.exe`**
-4. Pick language ¡ú use ¡ü¡ı + Enter (Back available)
-5. Main menu: **Clean** / **Backup** / **Restore** / **Uninstall** / Exit
+4. Pick language â†’ use â†‘â†“ + Enter (Back available)
+5. Main menu: **Clean** / **Backup** / **Restore** / **Change version** / **Disable auto updates** / **Uninstall** / Exit
 6. **Clean** and **Uninstall** both ask for scope first: **IDE** / **CLI** / **Both**
 
 ## CLI
@@ -63,6 +63,11 @@ cursor-cleanup.exe --lang en
 cursor-cleanup.exe --scan --scope ide
 cursor-cleanup.exe --scan --scope cli
 cursor-cleanup.exe --yes --scope both
+cursor-cleanup.exe --show-version
+cursor-cleanup.exe --set-version 3.27.22
+cursor-cleanup.exe --restore-version
+cursor-cleanup.exe --disable-updates
+cursor-cleanup.exe --show-update-settings
 ```
 
 | Flag | Meaning |
@@ -71,11 +76,16 @@ cursor-cleanup.exe --yes --scope both
 | `--scope ide\|cli\|both` | Data scope (default `both`) |
 | `--scan` | Scan only |
 | `--yes` | Auto-clean safe items (skips if scope processes are running) |
+| `--show-version` | Print install product/package version |
+| `--set-version <x.y.z>` | Rewrite top-level version only (writes `.bak` first) |
+| `--restore-version` | Restore version files from `.bak` |
+| `--disable-updates` | Write `%APPDATA%\Cursor\User\settings.json`: `update.mode=none` |
+| `--show-update-settings` | Print current `update.mode` settings |
 | `--no-pause` | No pause on exit |
 
 ### Uninstall (TUI)
 
-Main menu ¡ú **Uninstall Cursor / CLI** ¡ú choose **IDE** / **CLI** / **Both** (extra confirm). Uninstalling the IDE may request UAC on Windows and runs the official `Uninstall.exe` before wiping leftovers like `%APPDATA%\Cursor`. CLI-only removes `~/.cursor`, `cursor-agent`, and PATH ¡ª IDE stays. Project-local `.cursor/` folders are **not** deleted.
+Main menu â†’ **Uninstall Cursor / CLI** â†’ choose **IDE** / **CLI** / **Both** (extra confirm). Uninstalling the IDE may request UAC on Windows and runs the official `Uninstall.exe` before wiping leftovers like `%APPDATA%\Cursor`. CLI-only removes `~/.cursor`, `cursor-agent`, and PATH â€” IDE stays. Project-local `.cursor/` folders are **not** deleted.
 
 ## What it cleans
 
@@ -87,7 +97,7 @@ Main menu ¡ú **Uninstall Cursor / CLI** ¡ú choose **IDE** / **CLI** / **Both** (
 
 Normal **Clean** does **not** delete project code, installed extensions, or the Agent CLI install. **Uninstall** removes the IDE and/or CLI install and user data for the chosen scope (see above).
 
-Force-quit stops only processes for the chosen scope. Full ¡°Both¡± backup includes `auth.json`.
+Force-quit stops only processes for the chosen scope. Full â€œBothâ€ backup includes `auth.json`.
 
 ## Docs
 
@@ -103,5 +113,5 @@ mkdir dist 2>nul & copy /Y target\release\cursor-cleanup.exe dist\
 
 ## License
 
-MIT ¡ª see [LICENSE](LICENSE)
+MIT â€” see [LICENSE](LICENSE)
 

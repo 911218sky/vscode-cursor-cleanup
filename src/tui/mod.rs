@@ -3,12 +3,14 @@ mod terminal;
 mod theme;
 mod widgets;
 
-use app::App;
+use app::{App, ElevateRequest};
+use crate::elevate;
+use crate::i18n::{t, Msg};
 use crate::paths::DataScope;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use std::io::{self, stdout};
+use std::io::{self, stdout, Write};
 use std::time::Duration;
 use terminal::TerminalGuard;
 
@@ -26,7 +28,7 @@ pub struct TuiOutcome {
 
 /// Run the full interactive TUI.
 pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
-    let _guard = TerminalGuard::enter()?;
+    let mut guard = TerminalGuard::enter()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut app = App::new(skip_lang);
 
@@ -63,6 +65,29 @@ pub fn run(skip_lang: bool) -> io::Result<TuiOutcome> {
                     app.should_quit = true;
                 }
                 ev => app.handle_event(ev),
+            }
+        }
+
+        // Version write to Program Files: suspend TUI → UAC → resume (no EXE restart).
+        if let Some(req) = app.take_elevate_request() {
+            let ok = guard.suspend(|| {
+                println!();
+                println!("  {}", t(Msg::VersionNeedAdmin));
+                let _ = io::stdout().flush();
+                let elevated = match &req {
+                    ElevateRequest::SetVersion(ver) => elevate::elevate_set_version(ver),
+                    ElevateRequest::RestoreVersion => elevate::elevate_restore_version(),
+                };
+                if !elevated {
+                    println!("  {}", t(Msg::VersionElevateCancel));
+                }
+                let _ = io::stdout().flush();
+                elevated
+            })?;
+            app.on_elevate_finished(req, ok);
+            // Drop leftover input from before suspend.
+            while event::poll(Duration::ZERO).unwrap_or(false) {
+                let _ = event::read();
             }
         }
     }
