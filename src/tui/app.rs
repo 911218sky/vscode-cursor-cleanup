@@ -1,6 +1,6 @@
 use crate::backup::{self, sanitize_backup_name, BackupInfo};
 use crate::cleanup::{
-    collect_stats_for, force_quit_scope, is_editor_running, is_scope_running, launch_editor,
+    self, collect_stats_for, force_quit_scope, is_editor_running, is_scope_running, launch_editor,
     process_scope_for_stats, run_target, scope_data_available, sum_target_sizes,
     wait_until_scope_unlocked, TargetStat,
 };
@@ -28,7 +28,7 @@ use tui_input::Input;
 use tui_input::InputRequest;
 
 const MAIN_MENU_LEN: usize = 7;
-const VERSION_MENU_LEN: usize = 3;
+const VERSION_MENU_LEN: usize = 4;
 
 /// UAC elevation request handled by `tui::run` (suspend TUI → elevate → resume).
 #[derive(Clone, Debug)]
@@ -119,10 +119,12 @@ enum Screen {
     BackupName {
         include_state: bool,
     },
-    /// Pick set / restore / back for Cursor install version fields.
+    /// Pick set / restore / path / back for Cursor install version fields.
     VersionMenu,
     /// Type a new major.minor.patch for product.json + package.json.
     VersionInput,
+    /// Type Cursor install folder or Cursor.exe when auto-detect fails.
+    VersionPathInput,
     RestoreManage {
         backups: Vec<BackupInfo>,
     },
@@ -625,6 +627,7 @@ impl App {
             Screen::VersionMenu => vec![
                 t(Msg::VersionSetNew).to_string(),
                 t(Msg::VersionRestoreBak).to_string(),
+                t(Msg::VersionSetPath).to_string(),
                 t(Msg::Back).to_string(),
             ],
             Screen::ScanAndPlan { plan_labels, .. } => plan_labels.clone(),
@@ -991,12 +994,13 @@ impl App {
                 1 => {
                     self.run_restore_version();
                 }
+                2 => self.open_version_path_input(),
                 _ => {
                     self.screen = Screen::MainMenu;
                     self.reset_list(MAIN_MENU_LEN);
                 }
             },
-            Screen::VersionInput => {}
+            Screen::VersionInput | Screen::VersionPathInput => {}
             Screen::CleanScope => match idx {
                 0 => self.start_clean(DataScope::Ide),
                 1 => self.start_clean(DataScope::Cli),
@@ -1338,6 +1342,7 @@ impl App {
             Screen::ForceQuitting { .. } => return,
             Screen::BackupName { .. } => self.handle_name_key(key),
             Screen::VersionInput => self.handle_version_key(key),
+            Screen::VersionPathInput => self.handle_version_path_key(key),
             Screen::DeleteMulti { backups } => {
                 let len = backups.len() + 1;
                 match key.code {
@@ -1510,6 +1515,36 @@ impl App {
         self.status = StatusMsg::Dim(t(Msg::VersionHint).to_string());
     }
 
+    fn open_version_path_input(&mut self) {
+        let prefill = cleanup::cursor_path_override()
+            .map(|p| p.display().to_string())
+            .or_else(|| cleanup::resolve_editor_exe(Editor::Cursor).map(|p| p.display().to_string()))
+            .unwrap_or_else(|| r"C:\Program Files\cursor".to_string());
+        self.name_input = Input::default().with_value(prefill);
+        self.screen = Screen::VersionPathInput;
+        self.status = StatusMsg::Dim(t(Msg::VersionPathHint).to_string());
+    }
+
+    fn run_set_install_path(&mut self, raw: &str) {
+        match cursor_version::set_install_path_override(raw) {
+            Ok(loc) => {
+                self.status = StatusMsg::Ok(i18n::fmt_version_path_ok(&loc.display().to_string()));
+                self.show_version_menu_keep_status();
+                // Refresh status with detected versions when possible.
+                if let Some((p, k)) = cursor_version::read_installed_versions() {
+                    self.status = StatusMsg::Ok(format!(
+                        "{} — {}",
+                        i18n::fmt_version_path_ok(&loc.display().to_string()),
+                        i18n::fmt_version_current(&p, &k)
+                    ));
+                }
+            }
+            Err(_) => {
+                self.status = StatusMsg::Warn(t(Msg::VersionPathInvalid).to_string());
+            }
+        }
+    }
+
     fn run_set_version(&mut self, ver: &str) {
         match cursor_version::set_installed_version(ver) {
             Ok((old, new)) if old == new => {
@@ -1614,6 +1649,41 @@ impl App {
         }
     }
 
+    fn handle_version_path_key(&mut self, key: KeyEvent) {
+        if !matches!(self.screen, Screen::VersionPathInput) {
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => {
+                self.open_version_menu();
+            }
+            KeyCode::Enter => {
+                let raw = self.name_input.value().trim().to_string();
+                if raw.is_empty() {
+                    self.status = StatusMsg::Warn(t(Msg::VersionPathInvalid).to_string());
+                    return;
+                }
+                self.run_set_install_path(&raw);
+            }
+            KeyCode::Backspace => {
+                self.name_input.handle(InputRequest::DeletePrevChar);
+            }
+            KeyCode::Delete => {
+                self.name_input.handle(InputRequest::DeleteNextChar);
+            }
+            KeyCode::Left => {
+                self.name_input.handle(InputRequest::GoToPrevChar);
+            }
+            KeyCode::Right => {
+                self.name_input.handle(InputRequest::GoToNextChar);
+            }
+            KeyCode::Char(c) => {
+                self.name_input.handle(InputRequest::InsertChar(c));
+            }
+            _ => {}
+        }
+    }
+
     fn handle_back(&mut self) {
         let next = match self.screen.clone() {
             Screen::Language | Screen::MainMenu => {
@@ -1646,7 +1716,7 @@ impl App {
                 ..
             } => Self::scan_screen(editor, scope, root, total, stats),
             Screen::BackupName { .. } => return,
-            Screen::VersionInput => {
+            Screen::VersionInput | Screen::VersionPathInput => {
                 self.open_version_menu();
                 return;
             }
@@ -1686,7 +1756,7 @@ impl App {
 
         let animate_banner = !matches!(
             self.screen,
-            Screen::BackupName { .. } | Screen::VersionInput
+            Screen::BackupName { .. } | Screen::VersionInput | Screen::VersionPathInput
         );
         draw_banner(f, chunks[0], t(Msg::MainMenu), frame, animate_banner);
 
@@ -1796,6 +1866,28 @@ impl App {
                     input_area,
                     t(Msg::VersionAsk),
                     t(Msg::VersionHint),
+                    &display,
+                    cursor,
+                );
+            }
+            Screen::VersionPathInput => {
+                self.list_hit_area = Rect::default();
+                let input_area = chunks[1];
+                let scroll = self
+                    .name_input
+                    .visual_scroll(input_area.width.saturating_sub(4) as usize);
+                let display = self
+                    .name_input
+                    .value()
+                    .chars()
+                    .skip(scroll)
+                    .collect::<String>();
+                let cursor = self.name_input.visual_cursor().saturating_sub(scroll);
+                draw_input_field(
+                    f,
+                    input_area,
+                    t(Msg::VersionPathAsk),
+                    t(Msg::VersionPathHint),
                     &display,
                     cursor,
                 );

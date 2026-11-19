@@ -28,6 +28,8 @@ struct Cli {
     show_cursor_version: bool,
     set_version: Option<String>,
     restore_version: bool,
+    /// Manual Cursor install path (folder or Cursor.exe).
+    cursor_path: Option<String>,
     disable_updates: bool,
     show_update_settings: bool,
     help: bool,
@@ -46,6 +48,7 @@ fn parse_cli() -> Cli {
         show_cursor_version: false,
         set_version: None,
         restore_version: false,
+        cursor_path: None,
         disable_updates: false,
         show_update_settings: false,
         help: false,
@@ -78,6 +81,14 @@ fn parse_cli() -> Cli {
                     cli.help = true;
                 }
             }
+            "--cursor-path" => {
+                if let Some(v) = args.next() {
+                    cli.cursor_path = Some(v);
+                } else {
+                    eprintln!("--cursor-path requires <path>");
+                    cli.help = true;
+                }
+            }
             "-l" | "--lang" => {
                 if let Some(v) = args.next() {
                     cli.lang = Lang::parse(&v);
@@ -101,6 +112,9 @@ fn parse_cli() -> Cli {
             other if other.starts_with("--app=") => {}
             other if other.starts_with("--set-version=") => {
                 cli.set_version = Some(other.trim_start_matches("--set-version=").to_string());
+            }
+            other if other.starts_with("--cursor-path=") => {
+                cli.cursor_path = Some(other.trim_start_matches("--cursor-path=").to_string());
             }
             other if other.starts_with("--lang=") => {
                 let v = other.trim_start_matches("--lang=");
@@ -220,6 +234,7 @@ fn run_cli_show_version(pause_on_exit: bool) {
         }
         None => {
             cli::warn(i18n::t(i18n::Msg::VersionNotFound));
+            println!("  {}", i18n::t(i18n::Msg::VersionPathHint));
             if pause_on_exit {
                 cli::pause_exit();
             }
@@ -250,6 +265,7 @@ fn run_cli_set_version(ver: &str, pause_on_exit: bool) {
         }
         Err(cursor_version::SetVersionError::InstallNotFound) => {
             cli::warn(i18n::t(i18n::Msg::VersionNotFound));
+            println!("  {}", i18n::t(i18n::Msg::VersionPathHint));
             if pause_on_exit {
                 cli::pause_exit();
             }
@@ -378,6 +394,7 @@ fn run_cli_restore_version(pause_on_exit: bool) {
         }
         Err(cursor_version::RestoreVersionError::InstallNotFound) => {
             cli::warn(i18n::t(i18n::Msg::VersionNotFound));
+            println!("  {}", i18n::t(i18n::Msg::VersionPathHint));
             if pause_on_exit {
                 cli::pause_exit();
             }
@@ -426,6 +443,17 @@ fn run_cli_restore_version(pause_on_exit: bool) {
     }
 }
 
+fn apply_cursor_path_or_exit(raw: &str, pause_on_exit: bool) {
+    if cursor_version::set_install_path_override(raw).is_err() {
+        cli::warn(i18n::t(i18n::Msg::VersionPathInvalid));
+        println!("  {}", i18n::t(i18n::Msg::VersionPathHint));
+        if pause_on_exit {
+            cli::pause_exit();
+        }
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let cli = parse_cli();
 
@@ -440,6 +468,11 @@ fn main() {
     if cli.version {
         println!("cursor-cleanup {}", env!("CARGO_PKG_VERSION"));
         return;
+    }
+
+    // Apply before any version / relaunch path resolution (including elevated child).
+    if let Some(ref path) = cli.cursor_path {
+        apply_cursor_path_or_exit(path, !cli.no_pause);
     }
 
     let interactive = env::args().len() <= 1;

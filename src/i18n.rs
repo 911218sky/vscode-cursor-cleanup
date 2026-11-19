@@ -116,10 +116,15 @@ tr! {
     VersionMenu => { tw: "改版本號", cn: "改版本号", en: "Change version" },
     VersionSetNew => { tw: "設定新版本號…", cn: "设置新版本号…", en: "Set new version…" },
     VersionRestoreBak => { tw: "還原原始版本（.bak）", cn: "还原原始版本（.bak）", en: "Restore original (.bak)" },
+    VersionSetPath => { tw: "指定 Cursor 安裝路徑…", cn: "指定 Cursor 安装路径…", en: "Set Cursor install path…" },
     VersionAsk => { tw: "新版本號（major.minor.patch）", cn: "新版本号（major.minor.patch）", en: "New version (major.minor.patch)" },
     VersionHint => { tw: "只改 product.json / package.json 頂層 version；不改 commit。重啟 Cursor 後生效。", cn: "只改 product.json / package.json 顶层 version；不改 commit。重启 Cursor 后生效。", en: "Only rewrites top-level version in product.json / package.json; commit untouched. Restart Cursor to apply." },
+    VersionPathAsk => { tw: "Cursor 安裝路徑（資料夾或 Cursor.exe）", cn: "Cursor 安装路径（文件夹或 Cursor.exe）", en: "Cursor install path (folder or Cursor.exe)" },
+    VersionPathHint => { tw: "例如 C:\\Program Files\\cursor。需含 resources\\app\\product.json 與 package.json", cn: "例如 C:\\Program Files\\cursor。需含 resources\\app\\product.json 与 package.json", en: "e.g. C:\\Program Files\\cursor — needs resources\\app\\product.json and package.json" },
+    VersionPathOk => { tw: "已設定安裝路徑", cn: "已设置安装路径", en: "Install path set" },
+    VersionPathInvalid => { tw: "路徑無效：找不到 product.json / package.json", cn: "路径无效：找不到 product.json / package.json", en: "Invalid path — product.json / package.json not found" },
     VersionInvalid => { tw: "版本格式無效，請用如 3.27.22", cn: "版本格式无效，请用如 3.27.22", en: "Invalid version — use e.g. 3.27.22" },
-    VersionNotFound => { tw: "找不到 Cursor 安裝（product.json / package.json）", cn: "找不到 Cursor 安装（product.json / package.json）", en: "Cursor install not found (product.json / package.json)" },
+    VersionNotFound => { tw: "找不到 Cursor 安裝（product.json / package.json）— 可選「指定安裝路徑」", cn: "找不到 Cursor 安装（product.json / package.json）— 可选「指定安装路径」", en: "Cursor install not found (product.json / package.json) — use Set install path" },
     VersionPermission => { tw: "寫入被拒 — 請以系統管理員身分重試（Program Files 安裝）", cn: "写入被拒 — 请以管理员身份重试（Program Files 安装）", en: "Write denied — retry as Administrator (Program Files install)" },
     VersionNeedAdmin => { tw: "需要系統管理員權限才能改安裝目錄版本，正在請求 UAC…", cn: "需要管理员权限才能改安装目录版本，正在请求 UAC…", en: "Administrator required to change install version — requesting UAC…" },
     VersionElevateOk => { tw: "已以系統管理員完成改版本", cn: "已以管理员完成改版本", en: "Version change completed with Administrator rights" },
@@ -402,6 +407,14 @@ pub fn fmt_summary(name: &str, before: &str, after: &str, freed: &str) -> String
     }
 }
 
+pub fn fmt_version_path_ok(path: &str) -> String {
+    match lang() {
+        Lang::ZhTw => format!("{}：{path}", t(Msg::VersionPathOk)),
+        Lang::ZhCn => format!("{}：{path}", t(Msg::VersionPathOk)),
+        Lang::En => format!("{}: {path}", t(Msg::VersionPathOk)),
+    }
+}
+
 pub fn fmt_version_current(product: &str, package: &str) -> String {
     match lang() {
         Lang::ZhTw => format!("目前版本  product={product}  package={package}"),
@@ -460,6 +473,7 @@ cursor-cleanup  —  Cursor 清理 / 備份工具
   cursor-cleanup.exe --lang en
   cursor-cleanup.exe --show-version
   cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --cursor-path \"C:\\Program Files\\cursor\" --show-version
   cursor-cleanup.exe --restore-version
   cursor-cleanup.exe --disable-updates
   cursor-cleanup.exe --show-update-settings
@@ -472,6 +486,7 @@ cursor-cleanup  —  Cursor 清理 / 備份工具
       --show-version              顯示安裝目錄 product/package 版本
       --set-version <x.y.z>       只改頂層 version（先寫 .bak）
       --restore-version           從 .bak 還原版本檔
+      --cursor-path <path>        手動指定 Cursor 安裝路徑（資料夾或 Cursor.exe）
       --disable-updates           寫入 settings.json：update.mode=none
       --show-update-settings      顯示目前 update.mode 等設定
       --uninstall-plan            卸載乾跑預覽（不刪除；可搭配 --scope）
@@ -495,6 +510,7 @@ cursor-cleanup  —  Cursor 清理 / 备份工具
   cursor-cleanup.exe --lang en
   cursor-cleanup.exe --show-version
   cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --cursor-path \"C:\\Program Files\\cursor\" --show-version
   cursor-cleanup.exe --restore-version
   cursor-cleanup.exe --disable-updates
   cursor-cleanup.exe --show-update-settings
@@ -507,6 +523,7 @@ cursor-cleanup  —  Cursor 清理 / 备份工具
       --show-version              显示安装目录 product/package 版本
       --set-version <x.y.z>       只改顶层 version（先写 .bak）
       --restore-version           从 .bak 还原版本文件
+      --cursor-path <path>        手动指定 Cursor 安装路径（文件夹或 Cursor.exe）
       --disable-updates           写入 settings.json：update.mode=none
       --show-update-settings      显示当前 update.mode 等设置
       --uninstall-plan            卸载干跑预览（不删除；可搭配 --scope）
@@ -530,6 +547,7 @@ Usage:
   cursor-cleanup.exe --lang zh-TW
   cursor-cleanup.exe --show-version
   cursor-cleanup.exe --set-version 3.27.22
+  cursor-cleanup.exe --cursor-path \"C:\\Program Files\\cursor\" --show-version
   cursor-cleanup.exe --restore-version
   cursor-cleanup.exe --disable-updates
   cursor-cleanup.exe --show-update-settings
@@ -542,6 +560,7 @@ Options:
       --show-version              Print install product/package version
       --set-version <x.y.z>       Rewrite top-level version only (writes .bak first)
       --restore-version           Restore version files from .bak
+      --cursor-path <path>        Manual Cursor install path (folder or Cursor.exe)
       --disable-updates           Write settings.json: update.mode=none
       --show-update-settings      Print current update.mode settings
       --uninstall-plan            Uninstall dry-run preview (deletes nothing; use with --scope)

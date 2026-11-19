@@ -1,4 +1,4 @@
-use crate::cleanup::resolve_editor_exe;
+use crate::cleanup::{self, resolve_editor_exe};
 use crate::paths::Editor;
 use std::cmp::Ordering;
 use std::fs;
@@ -26,15 +26,74 @@ pub fn read_installed_versions() -> Option<(String, String)> {
     Some((pv, kv))
 }
 
-/// Paths to `product.json` and sibling `package.json`.
-pub fn version_json_paths() -> Option<(PathBuf, PathBuf)> {
-    let loc = resolve_editor_exe(Editor::Cursor)?;
-    let prod = product_json_path(&loc)?;
+/// Paths to `product.json` and sibling `package.json` for a known install location.
+pub fn version_json_paths_at(loc: &Path) -> Option<(PathBuf, PathBuf)> {
+    let prod = product_json_path(loc)?;
     let pkg = prod.with_file_name("package.json");
     if !pkg.is_file() {
         return None;
     }
     Some((prod, pkg))
+}
+
+/// Paths to `product.json` and sibling `package.json`.
+pub fn version_json_paths() -> Option<(PathBuf, PathBuf)> {
+    let loc = resolve_editor_exe(Editor::Cursor)?;
+    version_json_paths_at(&loc)
+}
+
+#[derive(Debug)]
+pub enum SetInstallPathError {
+    Empty,
+    NotFound,
+}
+
+impl SetInstallPathError {
+    pub fn detail(&self) -> &'static str {
+        match self {
+            SetInstallPathError::Empty => "empty path",
+            SetInstallPathError::NotFound => "product.json / package.json not found",
+        }
+    }
+}
+
+/// Validate a user-supplied Cursor install path (folder or Cursor.exe) and store it
+/// as the session override for version / relaunch resolution.
+pub fn set_install_path_override(raw: &str) -> Result<PathBuf, SetInstallPathError> {
+    let s = raw.trim().trim_matches('"').trim();
+    if s.is_empty() {
+        return Err(SetInstallPathError::Empty);
+    }
+    let p = PathBuf::from(s);
+    let loc = normalize_install_loc(&p).ok_or(SetInstallPathError::NotFound)?;
+    cleanup::set_cursor_path_override(Some(loc.clone()));
+    Ok(loc)
+}
+
+/// Prefer `Cursor.exe` under a directory when present; otherwise keep the path as-is.
+fn normalize_install_loc(p: &Path) -> Option<PathBuf> {
+    if version_json_paths_at(p).is_some() {
+        return Some(prefer_launch_path(p));
+    }
+    if p.is_dir() {
+        let exe = p.join("Cursor.exe");
+        if version_json_paths_at(&exe).is_some() {
+            return Some(exe);
+        }
+    }
+    None
+}
+
+fn prefer_launch_path(p: &Path) -> PathBuf {
+    if p.is_file() {
+        return p.to_path_buf();
+    }
+    let exe = p.join("Cursor.exe");
+    if exe.is_file() {
+        exe
+    } else {
+        p.to_path_buf()
+    }
 }
 
 /// Strict `major.minor.patch` digits only (same rule as cursor-login spoof).
@@ -628,6 +687,47 @@ mod tests {
             root_json_string_field(&text, "version").as_deref(),
             Some("3.4.5")
         );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn set_install_path_accepts_folder_or_exe() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let root = std::env::temp_dir().join(format!("cursor-path-ovr-{stamp}"));
+        let app = root.join("resources").join("app");
+        fs::create_dir_all(&app).unwrap();
+        fs::write(app.join("product.json"), r#"{ "version": "9.9.9" }"#).unwrap();
+        fs::write(app.join("package.json"), r#"{ "version": "9.9.9" }"#).unwrap();
+        let exe = root.join("Cursor.exe");
+        fs::write(&exe, b"").unwrap();
+
+        cleanup::set_cursor_path_override(None);
+
+        let set = set_install_path_override(root.to_str().unwrap()).unwrap();
+        assert_eq!(set, exe);
+        assert_eq!(
+            cleanup::cursor_path_override().as_deref(),
+            Some(exe.as_path())
+        );
+        assert_eq!(
+            version_json_paths()
+                .and_then(|(p, _)| fs::read_to_string(p).ok())
+                .and_then(|t| root_json_string_field(&t, "version")),
+            Some("9.9.9".into())
+        );
+
+        // Quoted path (common when pasting from Explorer).
+        let quoted = format!("\"{}\"", root.display());
+        let set2 = set_install_path_override(&quoted).unwrap();
+        assert_eq!(set2, exe);
+
+        assert!(set_install_path_override("").is_err());
+        assert!(set_install_path_override(r"C:\does\not\exist\cursor").is_err());
+
+        cleanup::set_cursor_path_override(None);
         let _ = fs::remove_dir_all(&root);
     }
 }

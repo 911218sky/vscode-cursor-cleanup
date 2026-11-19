@@ -1,5 +1,6 @@
 //! Windows UAC elevation helper (Start-Process -Verb RunAs).
 
+use crate::cleanup;
 use crate::i18n;
 use std::process::Command;
 
@@ -28,6 +29,7 @@ pub(crate) fn powershell_quote(s: &str) -> String {
 
 /// Relaunch this executable elevated with the given CLI args (Windows UAC).
 /// Always appends `--no-pause` and `--lang <current>` when not already present.
+/// Also forwards `--cursor-path` when a session override is set.
 /// Returns true if the elevated process was started and exited successfully.
 pub fn relaunch_elevated(extra_args: &[&str]) -> bool {
     #[cfg(windows)]
@@ -43,6 +45,15 @@ pub fn relaunch_elevated(extra_args: &[&str]) -> bool {
         if !args.iter().any(|a| a == "--lang" || a.starts_with("--lang=")) {
             args.push("--lang".into());
             args.push(lang.to_string());
+        }
+        let has_cursor_path = args
+            .iter()
+            .any(|a| a == "--cursor-path" || a.starts_with("--cursor-path="));
+        if !has_cursor_path {
+            if let Some(p) = cleanup::cursor_path_override() {
+                args.push("--cursor-path".into());
+                args.push(p.display().to_string());
+            }
         }
 
         let file = powershell_quote(&exe.display().to_string());

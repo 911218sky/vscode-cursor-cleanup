@@ -480,7 +480,7 @@ pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
     let defaults: &[&str] = match screen {
         MenuScreen::Language => &["繁", "简", "En"],
         MenuScreen::MainMenu => &["—", "·", "↺", "＃", "⊘", "⚠", "×"],
-        MenuScreen::VersionMenu => &["✎", "↺", "←"],
+        MenuScreen::VersionMenu => &["✎", "↺", "📂", "←"],
         MenuScreen::PickScope => &["◇", "◆", "◎", "←"],
         MenuScreen::Plan => &["·", "—", "═", "…", "←"],
         MenuScreen::CustomClean => &["✓", "→", "←"],

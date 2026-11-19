@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "cursor-cleanup"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "chrono",
  "crossterm",

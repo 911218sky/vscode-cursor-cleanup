@@ -8,7 +8,23 @@ use crate::paths::{
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::time::Duration;
+
+/// Optional install path from `--cursor-path` / TUI (session override).
+static CURSOR_PATH_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Set or clear the Cursor install path override used by `resolve_editor_exe`.
+pub fn set_cursor_path_override(path: Option<PathBuf>) {
+    if let Ok(mut g) = CURSOR_PATH_OVERRIDE.lock() {
+        *g = path;
+    }
+}
+
+/// Current Cursor install path override, if any.
+pub fn cursor_path_override() -> Option<PathBuf> {
+    CURSOR_PATH_OVERRIDE.lock().ok().and_then(|g| g.clone())
+}
 
 #[derive(Clone)]
 pub struct TargetStat {
@@ -272,6 +288,37 @@ pub fn windows_cursor_candidates(local_app_data: &Path) -> Vec<PathBuf> {
     ]
 }
 
+/// System-wide Cursor.exe candidates (Program Files / Program Files (x86)).
+#[cfg(windows)]
+pub fn windows_program_files_cursor_candidates() -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for root in [
+        std::env::var_os("ProgramFiles").map(PathBuf::from),
+        std::env::var_os("ProgramFiles(x86)").map(PathBuf::from),
+        Some(PathBuf::from(r"C:\Program Files")),
+        Some(PathBuf::from(r"C:\Program Files (x86)")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        for name in ["cursor", "Cursor"] {
+            let exe = root.join(name).join("Cursor.exe");
+            if !out
+                .iter()
+                .any(|p| path_eq_ignore_case(p.as_path(), exe.as_path()))
+            {
+                out.push(exe);
+            }
+        }
+    }
+    out
+}
+
+#[cfg(windows)]
+fn path_eq_ignore_case(a: &Path, b: &Path) -> bool {
+    a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
+}
+
 #[cfg(windows)]
 fn where_first(image: &str) -> Option<PathBuf> {
     let out = Command::new("where")
@@ -294,6 +341,11 @@ fn where_first(image: &str) -> Option<PathBuf> {
 /// Resolve the Cursor executable / app bundle path for relaunch.
 pub fn resolve_editor_exe(editor: Editor) -> Option<PathBuf> {
     let _ = editor;
+    if let Some(p) = cursor_path_override() {
+        if p.exists() {
+            return Some(p);
+        }
+    }
     #[cfg(windows)]
     {
         if let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
@@ -301,6 +353,11 @@ pub fn resolve_editor_exe(editor: Editor) -> Option<PathBuf> {
                 if cand.is_file() {
                     return Some(cand);
                 }
+            }
+        }
+        for cand in windows_program_files_cursor_candidates() {
+            if cand.is_file() {
+                return Some(cand);
             }
         }
         return where_first("Cursor.exe").or_else(|| where_first("cursor.cmd"));
@@ -602,6 +659,8 @@ mod tests {
         join_under_root, process_scope_for_stats, run_target_under, scope_data_available,
         unlock_probes_for, windows_cursor_candidates, TargetStat,
     };
+    #[cfg(windows)]
+    use super::windows_program_files_cursor_candidates;
     use crate::paths::{lock_scope_for_kinds, CleanTarget, DataRoot, DataScope, Risk, TargetKind};
     use std::fs;
     use std::path::PathBuf;
@@ -758,6 +817,20 @@ mod tests {
                 base.join("Programs").join("cursor").join("Cursor.exe"),
                 base.join("Programs").join("Cursor").join("Cursor.exe"),
             ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_program_files_candidates_include_cursor() {
+        let cands = windows_program_files_cursor_candidates();
+        assert!(
+            cands.iter().any(|p| {
+                p.to_string_lossy()
+                    .to_ascii_lowercase()
+                    .ends_with(r"\cursor\cursor.exe")
+            }),
+            "expected …\\cursor\\Cursor.exe candidate, got {cands:?}"
         );
     }
 
