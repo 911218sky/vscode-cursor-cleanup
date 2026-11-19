@@ -455,6 +455,9 @@ fn apply_cursor_path_or_exit(raw: &str, pause_on_exit: bool) {
 }
 
 fn main() {
+    // Before any stdout: admin-launched consoles often need CP_UTF8 + VT.
+    tui::prepare_windows_console();
+
     let cli = parse_cli();
 
     if let Some(lang) = cli.lang {

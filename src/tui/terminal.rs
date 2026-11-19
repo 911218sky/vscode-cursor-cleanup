@@ -7,12 +7,53 @@ use crossterm::terminal::{
 use crossterm::ExecutableCommand;
 use std::io::{self, stdout, Stdout, Write};
 
+/// Force UTF-8 + VT processing on the attached Windows console.
+///
+/// Elevated ("Run as administrator") consoles often start on the OEM code page
+/// without VT mode; without this, UTF-8 Chinese and ratatui ANSI can garble.
+pub fn prepare_windows_console() {
+    #[cfg(windows)]
+    {
+        const CP_UTF8: u32 = 65001;
+        const STD_OUTPUT_HANDLE: i32 = -11;
+        const ENABLE_PROCESSED_OUTPUT: u32 = 0x0001;
+        const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
+        const INVALID_HANDLE_VALUE: isize = -1;
+
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn SetConsoleOutputCP(w_code_page_id: u32) -> i32;
+            fn SetConsoleCP(w_code_page_id: u32) -> i32;
+            fn GetStdHandle(n_std_handle: i32) -> *mut std::ffi::c_void;
+            fn GetConsoleMode(h_console_handle: *mut std::ffi::c_void, lp_mode: *mut u32) -> i32;
+            fn SetConsoleMode(h_console_handle: *mut std::ffi::c_void, dw_mode: u32) -> i32;
+        }
+
+        unsafe {
+            let _ = SetConsoleOutputCP(CP_UTF8);
+            let _ = SetConsoleCP(CP_UTF8);
+
+            let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+            if !handle.is_null() && handle as isize != INVALID_HANDLE_VALUE {
+                let mut mode = 0u32;
+                if GetConsoleMode(handle, &mut mode) != 0 {
+                    let _ = SetConsoleMode(
+                        handle,
+                        mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+                    );
+                }
+            }
+        }
+    }
+}
+
 pub struct TerminalGuard {
     pub stdout: Stdout,
 }
 
 impl TerminalGuard {
     pub fn enter() -> io::Result<Self> {
+        prepare_windows_console();
         enable_raw_mode()?;
         let mut stdout = stdout();
         stdout.execute(EnterAlternateScreen)?;
@@ -33,6 +74,8 @@ impl TerminalGuard {
         let _ = self.stdout.execute(LeaveAlternateScreen);
         let _ = self.stdout.flush();
         let result = f();
+        // UAC / new consoles can reset CP / VT — re-apply before redrawing.
+        prepare_windows_console();
         enable_raw_mode()?;
         self.stdout.execute(EnterAlternateScreen)?;
         // Wipe the freshly entered alt screen so stale glyphs from the main buffer

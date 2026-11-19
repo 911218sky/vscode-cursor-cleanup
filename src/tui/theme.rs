@@ -3,7 +3,8 @@
 use crate::paths::Risk;
 use ratatui::style::{Color, Modifier, Style};
 
-const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+// ASCII-only: braille spinners are ambiguous-width under CJK admin consoles.
+const SPINNER: [&str; 4] = ["-", "\\", "|", "/"];
 const DOTS: [&str; 4] = ["   ", ".  ", ".. ", "..."];
 
 /// Primary signal — amber, scarce use only.

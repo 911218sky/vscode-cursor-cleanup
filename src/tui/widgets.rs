@@ -71,7 +71,7 @@ pub fn draw_banner(f: &mut Frame, area: Rect, _subtitle: &str, frame: u64, anima
         .border_type(BorderType::Plain)
         .border_style(theme::border_style(frame))
         .title(Span::styled(
-            format!(" cursor-cleanup · v{VERSION} "),
+            format!(" cursor-cleanup - v{VERSION} "),
             theme::accent_style(frame, 0),
         ))
         .title_alignment(Alignment::Left);
@@ -82,7 +82,7 @@ pub fn draw_banner(f: &mut Frame, area: Rect, _subtitle: &str, frame: u64, anima
     let marker = if animate {
         theme::spinner(frame)
     } else {
-        "·"
+        "-"
     };
     let hint = Line::from(vec![
         Span::styled(format!("{marker} "), theme::accent_style(frame, 0)),
@@ -97,7 +97,7 @@ pub fn draw_banner(f: &mut Frame, area: Rect, _subtitle: &str, frame: u64, anima
 }
 
 pub fn draw_scanning(f: &mut Frame, area: Rect, editor: Editor, frame: u64) {
-    let block = panel(" · Scanning ", frame);
+    let block = panel(" - Scanning ", frame);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -120,7 +120,7 @@ pub fn draw_scanning(f: &mut Frame, area: Rect, editor: Editor, frame: u64) {
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "Analyzing cache · logs · extensions · workspace storage",
+            "Analyzing cache - logs - extensions - workspace storage",
             Style::default().fg(Color::DarkGray),
         )),
     ];
@@ -152,7 +152,7 @@ pub fn list_items(
         .iter()
         .enumerate()
         .map(|(i, s)| {
-            let icon = icons.get(i).copied().unwrap_or("·");
+            let icon = icons.get(i).copied().unwrap_or("-");
             let style = if i == selected {
                 Style::default()
                     .fg(Color::White)
@@ -398,7 +398,7 @@ pub fn draw_input_field(
     let before = value.chars().take(cursor).collect::<String>();
     let after = value.chars().skip(cursor).collect::<String>();
     let line = Line::from(vec![
-        Span::styled("· ", theme::accent_style(0, 1)),
+        Span::styled("- ", theme::accent_style(0, 1)),
         Span::styled(before, Style::default().fg(Color::White)),
         Span::styled("▌", theme::accent_style(0, 2)),
         Span::styled(after, Style::default().fg(Color::White)),
@@ -415,9 +415,9 @@ pub fn draw_input_field(
 
 pub fn status_line(msg: &str, kind: StatusKind, frame: u64) -> Paragraph<'static> {
     let (icon, color) = match kind {
-        StatusKind::Ok => ("✔", theme::ok_color()),
+        StatusKind::Ok => ("+", theme::ok_color()),
         StatusKind::Warn => ("!", theme::warn_color()),
-        StatusKind::Dim => ("·", Color::DarkGray),
+        StatusKind::Dim => ("-", Color::DarkGray),
     };
     let icon_style = if matches!(kind, StatusKind::Dim) {
         Style::default().fg(theme::accent(frame, 0))
@@ -476,22 +476,18 @@ pub fn mouse_to_index(
 }
 
 /// Icons for common menu screens (same order as menu items).
+///
+/// Use plain ASCII `-` everywhere except the language picker: ambiguous-width
+/// Unicode symbols (—, ⚠, …) often render as 2 columns under CJK admin consoles
+/// while unicode-width counts them as 1, which eats the following Chinese glyph.
 pub fn icons_for_screen(screen: MenuScreen, count: usize) -> Vec<&'static str> {
-    let defaults: &[&str] = match screen {
-        MenuScreen::Language => &["繁", "简", "En"],
-        MenuScreen::MainMenu => &["—", "·", "↺", "＃", "⊘", "⚠", "×"],
-        MenuScreen::VersionMenu => &["✎", "↺", "📂", "←"],
-        MenuScreen::PickScope => &["◇", "◆", "◎", "←"],
-        MenuScreen::Plan => &["·", "—", "═", "…", "←"],
-        MenuScreen::CustomClean => &["✓", "→", "←"],
-        MenuScreen::BackupMode => &["·", "—", "←"],
-        MenuScreen::RestoreManage => &["↺", "×", "←"],
-        MenuScreen::Confirm => &["✓", "×"],
-        MenuScreen::Generic => &[],
-    };
-    (0..count)
-        .map(|i| defaults.get(i).copied().unwrap_or("·"))
-        .collect()
+    if matches!(screen, MenuScreen::Language) {
+        let defaults = ["繁", "简", "En"];
+        return (0..count)
+            .map(|i| defaults.get(i).copied().unwrap_or("-"))
+            .collect();
+    }
+    vec!["-"; count]
 }
 
 pub enum MenuScreen {

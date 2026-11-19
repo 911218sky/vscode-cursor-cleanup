@@ -12,6 +12,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::{self, stdout, Write};
 use std::time::Duration;
+pub use terminal::prepare_windows_console;
 use terminal::TerminalGuard;
 
 /// Result of an interactive TUI session.

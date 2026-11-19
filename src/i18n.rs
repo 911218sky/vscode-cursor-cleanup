@@ -62,7 +62,7 @@ macro_rules! tr {
 
 tr! {
     Back => { tw: "← 返回", cn: "← 返回", en: "← Back" },
-    BannerHint => { tw: "滑鼠點選 / ↑↓ Enter  ·  Esc 返回", cn: "鼠标点选 / ↑↓ Enter  ·  Esc 返回", en: "Click / ↑↓ Enter  ·  Esc Back" },
+    BannerHint => { tw: "滑鼠點選 / ↑↓ Enter  -  Esc 返回", cn: "鼠标点选 / ↑↓ Enter  -  Esc 返回", en: "Click / ↑↓ Enter  -  Esc Back" },
     PauseExit => { tw: "按 Enter 關閉視窗…", cn: "按 Enter 关闭窗口…", en: "Press Enter to close…" },
     PickLang => { tw: "選擇語言 / Language", cn: "选择语言 / Language", en: "Language" },
     LangTw => { tw: "繁體中文", cn: "繁体中文", en: "Traditional Chinese" },
